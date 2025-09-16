@@ -1,0 +1,38 @@
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+package-lock.json
+.env
+
+# Logs
+logs
+*.log
+logs/*
+pids
+*.pid
+*.seed
+*.pid.lock
+
+# Build output
+dist/
+build/
+coverage/
+.cache/
+
+# VSCode settings
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+# OS specific
+.DS_Store
+Thumbs.db
+
+# Temp files
+*.tmp
+*.swp
