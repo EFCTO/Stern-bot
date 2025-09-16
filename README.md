@@ -56,3 +56,7 @@
 * 명령/인터랙션을 추가할 경우 해당 디렉터리에 JS 파일을 추가하면 BotClient가 자동으로 로드합니다.
 * JSON 저장소(`data/parties.json`)는 활성 파티만 저장하며, 종료 시 자동 정리됩니다.
 * 프로세스 종료 시(`SIGINT`, `SIGTERM`) 등록된 서비스가 먼저 정리되고 Discord 클라이언트가 종료되도록 `registerShutdownHandlers`가 구성되어 있습니다.
+
+## 7.기여 
+https://discord.gg/8Vnz49nJ 해당 디스코드에 참여 후 PR을 보내주세요 
+
