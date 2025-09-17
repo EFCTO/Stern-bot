@@ -2,16 +2,17 @@ require("dotenv").config();
 
 const { GatewayIntentBits, Partials } = require("discord.js");
 const BotClient = require("./core/BotClient");
-const { initializeServices, shutdownServices, partyService } = require("./services");
+const { initializeServices, shutdownServices, partyService, musicService } = require("./services");
 
 async function bootstrap() {
   const client = new BotClient({
-    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages],
+    intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMessages, GatewayIntentBits.GuildVoiceStates],
     partials: [Partials.Channel]
   });
 
   await initializeServices();
   client.registerService("party", partyService);
+  client.registerService("music", musicService);
   await client.initialize();
   registerShutdownHandlers(client);
   await client.login(process.env.DISCORD_TOKEN);
