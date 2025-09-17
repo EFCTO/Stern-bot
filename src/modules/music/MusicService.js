@@ -1,15 +1,37 @@
+const { StreamType } = require("@discordjs/voice");
+let ytdlDistube; // 지연 로드
+
+
 const playdl = require("play-dl");
 const GuildQueue = require("./GuildQueue");
 const Track = require("./Track");
 
-function isValidHttpUrl(value) {
-  if (typeof value !== "string") return false;
-  try {
-    const url = new URL(value);
-    return url.protocol === "http:" || url.protocol === "https:";
-  } catch (error) {
-    return false;
+const INVALID_URL_PLACEHOLDERS = new Set(["undefined", "null", "about:blank", "data:"]);
+
+function normalizeHttpUrl(value) {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+
+  const normalized = trimmed.toLowerCase();
+  if (INVALID_URL_PLACEHOLDERS.has(normalized)) {
+    return null;
   }
+
+  try {
+    const url = new URL(trimmed);
+    if (url.protocol !== "http:" && url.protocol !== "https:") {
+      return null;
+    }
+    return url.toString();
+  } catch (error) {
+    return null;
+  }
+}
+
+function isValidHttpUrl(value) {
+  return normalizeHttpUrl(value) !== null;
 }
 
 function extractDuration(video) {
@@ -76,6 +98,30 @@ const INVALID_VIDEO_ID_PLACEHOLDERS = new Set([
   "private video"
 ]);
 
+const UNAVAILABLE_TITLE_KEYWORDS = [
+  "deleted video",
+  "private video",
+  "video unavailable",
+  "removed video",
+  "비공개 동영상",
+  "삭제된 동영상",
+  "재생할 수 없는 동영상"
+];
+
+function sanitizeCandidateString(value) {
+  if (typeof value !== "string") return null;
+
+  const trimmed = value.trim();
+  if (trimmed.length === 0) return null;
+
+  const normalized = trimmed.toLowerCase();
+  if (INVALID_URL_PLACEHOLDERS.has(normalized)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
 function normalizeVideoId(candidate) {
   if (typeof candidate !== "string") return null;
 
@@ -95,21 +141,12 @@ function normalizeVideoId(candidate) {
 }
 
 function extractVideoIdFromUrl(url) {
-  if (typeof url !== "string") {
+  const normalizedUrl = normalizeHttpUrl(url);
+  if (!normalizedUrl) {
     return { videoId: null, isYoutube: false };
   }
 
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch (error) {
-    return { videoId: null, isYoutube: false };
-  }
-
-  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
-    return { videoId: null, isYoutube: false };
-  }
-
+  const parsed = new URL(normalizedUrl);
   const hostname = parsed.hostname.replace(/^www\./i, "").toLowerCase();
   const isYoutube =
     hostname === "youtu.be" ||
@@ -152,7 +189,9 @@ function extractVideoId(video) {
     video.identifier,
     video.id?.videoId,
     video.id?.video_id,
-    video.id?.id
+    video.id?.id,
+    video.videoDetails?.videoId,
+    video.video_details?.videoId
   ];
 
   for (const candidate of candidates) {
@@ -177,13 +216,21 @@ function resolveVideoUrl(video, fallbackUrl) {
   ];
 
   for (const candidate of candidates) {
-    const { videoId: candidateVideoId, isYoutube } = extractVideoIdFromUrl(candidate);
+    const sanitizedCandidate = sanitizeCandidateString(candidate);
+    if (!sanitizedCandidate) {
+      continue;
+    }
+
+    const { videoId: candidateVideoId, isYoutube } = extractVideoIdFromUrl(sanitizedCandidate);
     if (candidateVideoId) {
       return `https://www.youtube.com/watch?v=${candidateVideoId}`;
     }
 
-    if (!isYoutube && isValidHttpUrl(candidate)) {
-      return candidate;
+    if (!isYoutube) {
+      const normalizedUrl = normalizeHttpUrl(sanitizedCandidate);
+      if (normalizedUrl) {
+        return normalizedUrl;
+      }
     }
   }
 
@@ -195,9 +242,41 @@ function resolveVideoUrl(video, fallbackUrl) {
   return null;
 }
 
+function isUnavailableVideo(video) {
+  const titleCandidates = [
+    video?.title,
+    video?.name,
+    video?.video_title,
+    video?.videoTitle
+  ];
+
+  for (const candidate of titleCandidates) {
+    if (typeof candidate !== "string") continue;
+    const normalized = candidate.trim().toLowerCase();
+    if (!normalized) continue;
+    if (UNAVAILABLE_TITLE_KEYWORDS.some(keyword => normalized.includes(keyword))) {
+      return true;
+    }
+  }
+
+  if (video?.isPrivate === true || video?.is_private === true) {
+    return true;
+  }
+
+  if (video?.isLive === false && video?.status === "unavailable") {
+    return true;
+  }
+
+  return false;
+}
+
 function createTrackFromVideo(video, requestedBy, { fallbackUrl = null, fallbackTitle = null } = {}) {
+  if (isUnavailableVideo(video)) {
+    return null;
+  }
+
   const url = resolveVideoUrl(video, fallbackUrl);
-  if (!url) {
+  if (!url || !isValidHttpUrl(url)) {
     return null;
   }
 
@@ -258,11 +337,9 @@ class MusicService {
       const details = info.video_details;
       const track = createTrackFromVideo(details, requestedBy, {
         fallbackUrl: query,
-        fallbackTitle: details?.title
+        fallbackTitle: details?.title,
       });
-      if (track) {
-        tracks.push(track);
-      }
+      if (track) tracks.push(track);
       return tracks;
     }
 
@@ -272,37 +349,109 @@ class MusicService {
       for (const [index, video] of videos.entries()) {
         if (index >= 100) break;
         const track = createTrackFromVideo(video, requestedBy, {
-          fallbackTitle: video?.title
+          fallbackTitle: video?.title,
         });
-        if (track) {
-          tracks.push(track);
-        }
+        if (track) tracks.push(track);
       }
       return tracks;
     }
 
-    const results = await playdl.search(query, { source: { youtube: "video" }, limit: 1 });
-    if (results.length === 0) {
-      return tracks;
-    }
+    const results = await playdl.search(query, {
+      source: { youtube: "video" },
+      limit: 1,
+    });
+    if (results.length === 0) return tracks;
 
     const video = results[0];
     const track = createTrackFromVideo(video, requestedBy, {
-      fallbackTitle: video?.title
+      fallbackTitle: video?.title,
     });
-    if (track) {
-      tracks.push(track);
-    }
+    if (track) tracks.push(track);
 
     return tracks;
   }
 
   async createStream(track) {
-    if (!track?.url || !isValidHttpUrl(track.url)) {
+    const url = typeof track?.url === "string" ? track.url.trim() : "";
+    if (!url || !isValidHttpUrl(url)) {
       throw new Error("유효한 트랙 URL을 확인할 수 없습니다.");
     }
 
-    return playdl.stream(track.url, { discordPlayerCompatibility: true });
+    try {
+      const kind = playdl.yt_validate(url);
+
+      // ── YouTube일 때: play-dl → 실패 시 distube ytdl-core 폴백 ──
+      if (kind === "video") {
+        // 1) play-dl basic_info → stream_from_info
+        try {
+          const basic = await playdl.video_basic_info(url);
+          if (basic?.video_details) {
+            const s1 = await playdl.stream_from_info(basic, {
+              discordPlayerCompatibility: true,
+            });
+            if (s1?.stream) return s1;
+          }
+          throw new Error("stream_from_info 결과 없음");
+        } catch (e1) {
+          console.warn("⚠️ play-dl basic_info 경로 실패:", e1?.message);
+        }
+
+        // 2) play-dl video_info → stream_from_info
+        try {
+          const info = await playdl.video_info(url);
+          const s2 = await playdl.stream_from_info(info, {
+            discordPlayerCompatibility: true,
+          });
+          if (s2?.stream) return s2;
+          throw new Error("stream_from_info 결과 없음(2차)");
+        } catch (e2) {
+          console.warn("⚠️ play-dl video_info 경로 실패:", e2?.message);
+        }
+
+        // 3) @distube/ytdl-core 폴백 (FFmpeg 없이 WebM/Opus만 사용)
+        try {
+          if (!ytdlDistube) ytdlDistube = require("@distube/ytdl-core");
+
+          const info = await ytdlDistube.getInfo(url);
+          const opus = info.formats
+            .filter(
+              (f) =>
+                f.hasAudio &&
+                !f.hasVideo &&
+                /opus/i.test(f.audioCodec || "") &&
+                /webm/i.test(f.container || "")
+            )
+            .sort(
+              (a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0)
+            )[0];
+
+          if (!opus) {
+            throw new Error(
+              "WebM/Opus 오디오 포맷이 없습니다. (FFmpeg 설치가 필요할 수 있음)"
+            );
+          }
+
+          const streamReadable = ytdlDistube.downloadFromInfo(info, {
+            format: opus,
+            highWaterMark: 1 << 25,
+          });
+
+          return { stream: streamReadable, type: StreamType.WebmOpus };
+        } catch (e3) {
+          e3.input = url;
+          console.error("⛔ distube ytdl-core (FFmpeg-less) 실패:", e3);
+          throw e3;
+        }
+      }
+
+      // ── YouTube 외 소스: 기존 play-dl 경로 유지 ──
+      const s = await playdl.stream(url, { discordPlayerCompatibility: true });
+      if (!s?.stream) throw new Error("stream(url) 결과 없음");
+      return s;
+    } catch (e) {
+      e.input = url;
+      throw e;
+    }
   }
 }
 

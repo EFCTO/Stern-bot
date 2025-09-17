@@ -1,5 +1,10 @@
 require("dotenv").config();
 
+const ffmpegPath = require('ffmpeg-static');
+if (ffmpegPath) {
+  process.env.FFMPEG_PATH = ffmpegPath;
+}
+
 const { GatewayIntentBits, Partials } = require("discord.js");
 const BotClient = require("./core/BotClient");
 const { initializeServices, shutdownServices, partyService, musicService } = require("./services");

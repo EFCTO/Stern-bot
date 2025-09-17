@@ -10,6 +10,25 @@ const {
 
 const { formatDuration } = require("./utils");
 
+// 간단 URL 체크
+function isLikelyHttpUrl(s) {
+  if (typeof s !== "string") return false;
+  const t = s.trim().toLowerCase();
+  return t.startsWith("http://") || t.startsWith("https://");
+}
+
+// 로깅용 요약
+function summarizeTrack(t) {
+  if (!t || typeof t !== "object") return t;
+  return {
+    title: t.title,
+    url: t.url,
+    author: t.author,
+    durationMS: t.durationMS,
+    requestedBy: t.requestedBy?.id || t.requestedBy?.username || t.requestedBy
+  };
+}
+
 class GuildQueue {
   constructor(guild, service) {
     this.guild = guild;
@@ -211,9 +230,29 @@ class GuildQueue {
       return;
     }
 
+    // 🔎 어떤 트랙이 들어왔는지 요약 로깅 (과도한 raw 출력 방지)
+    console.log(`🎵 다음 트랙 선택 [${this.guild.id}]`, summarizeTrack(nextTrack));
+
+    // ⛔ URL 없거나 이상하면 스킵 (여기가 핵심 가드)
+    const url = typeof nextTrack.url === "string" ? nextTrack.url.trim() : "";
+    if (!isLikelyHttpUrl(url)) {
+      console.error("❌ 유효하지 않은 트랙 URL, 스킵:", url, "원본:", summarizeTrack(nextTrack));
+      this.current = null;
+      this.startedAt = null;
+      // 다음 항목 처리
+      await this.#processQueue();
+      return;
+    }
+
     this.queueLock = true;
     try {
-      const stream = await this.service.createStream(nextTrack);
+      console.log("🎧 createStream 호출:", url);
+      const stream = await this.service.createStream({ ...nextTrack, url });
+
+      if (!stream || !stream.stream) {
+        throw new Error("play-dl에서 유효한 스트림을 받지 못했습니다.");
+      }
+
       const resource = createAudioResource(stream.stream, {
         inputType: stream.type,
         inlineVolume: true
@@ -227,11 +266,18 @@ class GuildQueue {
       this.current = nextTrack;
       this.startedAt = Date.now();
       this.#clearLeaveTimer();
+
+      console.log("✅ 재생 시작:", summarizeTrack(this.current));
     } catch (error) {
-      console.error("트랙 재생 실패", error);
+      // 에러 상세 로깅 (play-dl 특유의 input 필드 같이)
+      console.error("트랙 재생 실패", {
+        message: error?.message,
+        input: error?.input,
+        stack: error?.stack?.split("\n").slice(0, 5).join("\n")
+      });
       this.current = null;
       this.startedAt = null;
-      this.queueLock = false;
+      // 다음 트랙 계속 시도
       await this.#processQueue();
       return;
     } finally {
