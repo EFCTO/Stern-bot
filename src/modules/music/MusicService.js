@@ -76,6 +76,72 @@ const INVALID_VIDEO_ID_PLACEHOLDERS = new Set([
   "private video"
 ]);
 
+function normalizeVideoId(candidate) {
+  if (typeof candidate !== "string") return null;
+
+  const trimmed = candidate.trim();
+  if (trimmed.length === 0) return null;
+
+  const normalized = trimmed.toLowerCase();
+  if (INVALID_VIDEO_ID_PLACEHOLDERS.has(normalized)) {
+    return null;
+  }
+
+  if (!YOUTUBE_VIDEO_ID_REGEX.test(trimmed)) {
+    return null;
+  }
+
+  return trimmed;
+}
+
+function extractVideoIdFromUrl(url) {
+  if (typeof url !== "string") {
+    return { videoId: null, isYoutube: false };
+  }
+
+  let parsed;
+  try {
+    parsed = new URL(url);
+  } catch (error) {
+    return { videoId: null, isYoutube: false };
+  }
+
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { videoId: null, isYoutube: false };
+  }
+
+  const hostname = parsed.hostname.replace(/^www\./i, "").toLowerCase();
+  const isYoutube =
+    hostname === "youtu.be" ||
+    hostname.endsWith("youtube.com") ||
+    hostname.endsWith("youtube-nocookie.com");
+
+  if (!isYoutube) {
+    return { videoId: null, isYoutube: false };
+  }
+
+  if (hostname === "youtu.be") {
+    const segments = parsed.pathname.split("/").filter(Boolean);
+    if (segments.length === 0) return { videoId: null, isYoutube: true };
+    return { videoId: normalizeVideoId(segments[0]), isYoutube: true };
+  }
+
+  const directId = normalizeVideoId(parsed.searchParams.get("v"));
+  if (directId) {
+    return { videoId: directId, isYoutube: true };
+  }
+
+  const segments = parsed.pathname.split("/").filter(Boolean);
+  if (segments.length >= 2) {
+    const [first, second] = segments;
+    if (["embed", "shorts", "live", "v"].includes(first)) {
+      return { videoId: normalizeVideoId(second), isYoutube: true };
+    }
+  }
+
+  return { videoId: null, isYoutube: true };
+}
+
 function extractVideoId(video) {
   if (!video) return null;
 
@@ -90,18 +156,9 @@ function extractVideoId(video) {
   ];
 
   for (const candidate of candidates) {
-    if (typeof candidate !== "string") continue;
-
-    const trimmed = candidate.trim();
-    if (trimmed.length === 0) continue;
-
-    const normalized = trimmed.toLowerCase();
-    if (INVALID_VIDEO_ID_PLACEHOLDERS.has(normalized)) {
-      continue;
-    }
-
-    if (YOUTUBE_VIDEO_ID_REGEX.test(trimmed)) {
-      return trimmed;
+    const normalized = normalizeVideoId(candidate);
+    if (normalized) {
+      return normalized;
     }
   }
 
@@ -115,17 +172,19 @@ function resolveVideoUrl(video, fallbackUrl) {
     video?.short_url,
     video?.link,
     video?.permalink,
-    video?.webpage_url
+    video?.webpage_url,
+    fallbackUrl
   ];
 
   for (const candidate of candidates) {
-    if (isValidHttpUrl(candidate)) {
+    const { videoId: candidateVideoId, isYoutube } = extractVideoIdFromUrl(candidate);
+    if (candidateVideoId) {
+      return `https://www.youtube.com/watch?v=${candidateVideoId}`;
+    }
+
+    if (!isYoutube && isValidHttpUrl(candidate)) {
       return candidate;
     }
-  }
-
-  if (isValidHttpUrl(fallbackUrl)) {
-    return fallbackUrl;
   }
 
   const videoId = extractVideoId(video);
