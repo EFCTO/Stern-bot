@@ -1,53 +1,41 @@
+// src/commands/chzzk.js
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
-const { ensureChzzkService } = require("../modules/chzzk/helpers");
-const { searchChannels, getChannel } = require("../modules/chzzk/api");
 
 module.exports = {
   data: new SlashCommandBuilder()
     .setName("chzzk")
     .setDescription("치지직 방송 알림을 설정합니다.")
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator)
+    .setDefaultMemberPermissions(PermissionFlagsBits.undefined)
+    .setDMPermission(false)
     .addSubcommand(sub =>
-      sub.setName("register")
+      sub
+        .setName("register")
         .setDescription("치지직 방송 닉네임을 등록합니다.")
         .addStringOption(opt =>
-          opt.setName("nickname")
-            .setDescription("치지직 방송 닉네임")
-            .setRequired(true)
-        )
+          opt.setName("nickname").setDescription("치지직 방송 닉네임").setRequired(true),
+        ),
     )
-    .addSubcommand(sub =>
-      sub.setName("clear")
-        .setDescription("등록된 치지직 방송인을 제거합니다.")
-    )
-    .addSubcommand(sub =>
-      sub.setName("status")
-        .setDescription("현재 등록된 치지직 방송 정보를 확인합니다.")
-    ),
+    .addSubcommand(sub => sub.setName("clear").setDescription("등록된 치지직 방송인을 제거합니다."))
+    .addSubcommand(sub => sub.setName("status").setDescription("현재 등록된 치지직 방송 정보를 확인합니다.")),
 
   async execute(interaction) {
+    // ✅ 지연 로드: 배포 시(require 시)에는 실행되지 않음
+    const { ensureChzzkService } = require("../modules/chzzk/helpers");
+
     const service = await ensureChzzkService(interaction);
     if (!service) return;
 
-    const subcommand = interaction.options.getSubcommand();
-
-    if (subcommand === "register") {
-      await handleRegister(interaction, service);
-      return;
-    }
-
-    if (subcommand === "clear") {
-      await handleClear(interaction, service);
-      return;
-    }
-
-    if (subcommand === "status") {
-      await handleStatus(interaction, service);
-    }
-  }
+    const sub = interaction.options.getSubcommand();
+    if (sub === "register") return handleRegister(interaction, service);
+    if (sub === "clear") return handleClear(interaction, service);
+    if (sub === "status") return handleStatus(interaction, service);
+  },
 };
 
 async function handleRegister(interaction, service) {
+  // ✅ 지연 로드
+  const { searchChannels, getChannel } = require("../modules/chzzk/api");
+
   const nickname = interaction.options.getString("nickname", true).trim();
   await interaction.deferReply({ ephemeral: true });
 
@@ -59,13 +47,13 @@ async function handleRegister(interaction, service) {
     }
 
     const candidates = await searchChannels(nickname, { size: 10 });
-    if (!candidates.length) {
+    if (!Array.isArray(candidates) || candidates.length === 0) {
       await interaction.editReply(`\`${nickname}\` 닉네임으로 검색된 치지직 방송인이 없습니다.`);
       return;
     }
 
     const normalized = nickname.toLowerCase();
-    const matched = candidates.find(entry => entry.channelName.toLowerCase() === normalized) || candidates[0];
+    const matched = candidates.find(e => String(e.channelName || "").toLowerCase() === normalized) || candidates[0];
 
     const channelInfo = await getChannel(matched.channelId);
     if (!channelInfo) {
@@ -78,21 +66,18 @@ async function handleRegister(interaction, service) {
       channelName: matched.channelName,
       notifyChannelId: channel.id,
       profileImageUrl: matched.channelImageUrl,
-      isLive: channelInfo.openLive
+      isLive: !!channelInfo.openLive,
     });
 
     const parts = [
       `치지직 방송인이 **${matched.channelName}**(채널 ID: \`${matched.channelId}\`)으로 등록되었습니다.`,
-      `알림 채널: <#${channel.id}>`
+      `알림 채널: <#${channel.id}>`,
     ];
-
-    if (channelInfo.openLive) {
-      parts.push("현재 방송이 진행 중입니다. 방송 종료 후 다시 켜지면 알림이 전송됩니다.");
-    }
+    if (channelInfo.openLive) parts.push("현재 방송이 진행 중입니다. 방송 종료 후 다시 켜지면 알림이 전송됩니다.");
 
     await interaction.editReply(parts.join("\n"));
-  } catch (error) {
-    console.error("치지직 방송인 등록 실패", error);
+  } catch (err) {
+    console.error("치지직 방송인 등록 실패", err);
     await interaction.editReply("치지직 API 요청 중 문제가 발생했습니다. 잠시 후 다시 시도해주세요.");
   }
 }
@@ -113,10 +98,7 @@ async function handleClear(interaction, service) {
 async function handleStatus(interaction, service) {
   const broadcaster = service.getBroadcaster();
   if (!broadcaster) {
-    await interaction.reply({
-      content: "등록된 치지직 방송인이 없습니다.",
-      ephemeral: true
-    });
+    await interaction.reply({ content: "등록된 치지직 방송인이 없습니다.", ephemeral: true });
     return;
   }
 
@@ -124,18 +106,13 @@ async function handleStatus(interaction, service) {
     `현재 등록된 방송인: **${broadcaster.channelName}**`,
     `채널 ID: \`${broadcaster.channelId}\``,
     `알림 채널: <#${broadcaster.notifyChannelId}>`,
-    `최근 상태: ${broadcaster.isLive ? "방송 중" : "오프라인"}`
+    `최근 상태: ${broadcaster.isLive ? "방송 중" : "오프라인"}`,
   ];
 
   if (broadcaster.lastAnnouncedAt) {
-    const lastDate = new Date(broadcaster.lastAnnouncedAt);
-    if (!Number.isNaN(lastDate.getTime())) {
-      lines.push(`마지막 알림: <t:${Math.floor(lastDate.getTime() / 1000)}:R>`);
-    }
+    const t = new Date(broadcaster.lastAnnouncedAt);
+    if (!Number.isNaN(t.getTime())) lines.push(`마지막 알림: <t:${Math.floor(t.getTime() / 1000)}:R>`);
   }
 
-  await interaction.reply({
-    content: lines.join("\n"),
-    ephemeral: true
-  });
+  await interaction.reply({ content: lines.join("\n"), ephemeral: true });
 }
