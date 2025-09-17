@@ -4,11 +4,11 @@ function makeSetupEmbed(title, desc) {
   return new EmbedBuilder()
     .setTitle(title)
     .setDescription(desc)
-    .setColor("DarkTeal")
+    .setColor(0x11806a)
     .setTimestamp()
 }
 
-function makeNoticeEmbed(title, desc, color = "Blurple") {
+function makeNoticeEmbed(title, desc, color = 0x5865F2) {
   return new EmbedBuilder()
     .setTitle(title)
     .setDescription(desc)
