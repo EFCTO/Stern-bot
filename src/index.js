@@ -7,7 +7,7 @@ if (ffmpegPath) {
 
 const { GatewayIntentBits, Partials } = require("discord.js");
 const BotClient = require("./core/BotClient");
-const { initializeServices, shutdownServices, partyService, musicService } = require("./services");
+const { initializeServices, shutdownServices, partyService, musicService, chzzkService } = require("./services");
 
 async function bootstrap() {
   const client = new BotClient({
@@ -18,6 +18,7 @@ async function bootstrap() {
   await initializeServices();
   client.registerService("party", partyService);
   client.registerService("music", musicService);
+  client.registerService("chzzk", chzzkService);
   await client.initialize();
   registerShutdownHandlers(client);
   await client.login(process.env.DISCORD_TOKEN);
