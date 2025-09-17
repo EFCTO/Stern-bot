@@ -69,6 +69,13 @@ function extractChannelName(video) {
   );
 }
 
+const YOUTUBE_VIDEO_ID_REGEX = /^[\w-]{11}$/;
+const INVALID_VIDEO_ID_PLACEHOLDERS = new Set([
+  "undefined",
+  "deleted video",
+  "private video"
+]);
+
 function extractVideoId(video) {
   if (!video) return null;
 
@@ -83,8 +90,18 @@ function extractVideoId(video) {
   ];
 
   for (const candidate of candidates) {
-    if (typeof candidate === "string" && candidate.trim().length > 0) {
-      return candidate.trim();
+    if (typeof candidate !== "string") continue;
+
+    const trimmed = candidate.trim();
+    if (trimmed.length === 0) continue;
+
+    const normalized = trimmed.toLowerCase();
+    if (INVALID_VIDEO_ID_PLACEHOLDERS.has(normalized)) {
+      continue;
+    }
+
+    if (YOUTUBE_VIDEO_ID_REGEX.test(trimmed)) {
+      return trimmed;
     }
   }
 
