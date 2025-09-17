@@ -2,6 +2,16 @@ const playdl = require("play-dl");
 const GuildQueue = require("./GuildQueue");
 const Track = require("./Track");
 
+function isValidHttpUrl(value) {
+  if (typeof value !== "string") return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "http:" || url.protocol === "https:";
+  } catch (error) {
+    return false;
+  }
+}
+
 function extractDuration(video) {
   if (!video) return 0;
 
@@ -59,6 +69,73 @@ function extractChannelName(video) {
   );
 }
 
+function extractVideoId(video) {
+  if (!video) return null;
+
+  const candidates = [
+    video.id,
+    video.videoId,
+    video.video_id,
+    video.identifier,
+    video.id?.videoId,
+    video.id?.video_id,
+    video.id?.id
+  ];
+
+  for (const candidate of candidates) {
+    if (typeof candidate === "string" && candidate.trim().length > 0) {
+      return candidate.trim();
+    }
+  }
+
+  return null;
+}
+
+function resolveVideoUrl(video, fallbackUrl) {
+  const candidates = [
+    video?.url,
+    video?.shortUrl,
+    video?.short_url,
+    video?.link,
+    video?.permalink,
+    video?.webpage_url
+  ];
+
+  for (const candidate of candidates) {
+    if (isValidHttpUrl(candidate)) {
+      return candidate;
+    }
+  }
+
+  if (isValidHttpUrl(fallbackUrl)) {
+    return fallbackUrl;
+  }
+
+  const videoId = extractVideoId(video);
+  if (videoId) {
+    return `https://www.youtube.com/watch?v=${videoId}`;
+  }
+
+  return null;
+}
+
+function createTrackFromVideo(video, requestedBy, { fallbackUrl = null, fallbackTitle = null } = {}) {
+  const url = resolveVideoUrl(video, fallbackUrl);
+  if (!url) {
+    return null;
+  }
+
+  return new Track({
+    title: video?.title ?? fallbackTitle ?? "제목 없음",
+    url,
+    durationMS: extractDuration(video),
+    thumbnail: extractThumbnail(video),
+    author: extractChannelName(video),
+    requestedBy,
+    raw: video
+  });
+}
+
 class MusicService {
   constructor() {
     this.queues = new Map();
@@ -103,16 +180,13 @@ class MusicService {
     if (validation === "video") {
       const info = await playdl.video_basic_info(query);
       const details = info.video_details;
-      tracks.push(
-        new Track({
-          title: details.title,
-          url: details.url,
-          durationMS: extractDuration(details),
-          thumbnail: extractThumbnail(details),
-          author: extractChannelName(details),
-          requestedBy
-        })
-      );
+      const track = createTrackFromVideo(details, requestedBy, {
+        fallbackUrl: query,
+        fallbackTitle: details?.title
+      });
+      if (track) {
+        tracks.push(track);
+      }
       return tracks;
     }
 
@@ -121,16 +195,12 @@ class MusicService {
       const videos = await playlist.all_videos();
       for (const [index, video] of videos.entries()) {
         if (index >= 100) break;
-        tracks.push(
-          new Track({
-            title: video.title,
-            url: video.url,
-            durationMS: extractDuration(video),
-            thumbnail: extractThumbnail(video),
-            author: extractChannelName(video),
-            requestedBy
-          })
-        );
+        const track = createTrackFromVideo(video, requestedBy, {
+          fallbackTitle: video?.title
+        });
+        if (track) {
+          tracks.push(track);
+        }
       }
       return tracks;
     }
@@ -141,21 +211,21 @@ class MusicService {
     }
 
     const video = results[0];
-    tracks.push(
-      new Track({
-        title: video.title,
-        url: video.url,
-        durationMS: extractDuration(video),
-        thumbnail: extractThumbnail(video),
-        author: extractChannelName(video),
-        requestedBy
-      })
-    );
+    const track = createTrackFromVideo(video, requestedBy, {
+      fallbackTitle: video?.title
+    });
+    if (track) {
+      tracks.push(track);
+    }
 
     return tracks;
   }
 
   async createStream(track) {
+    if (!track?.url || !isValidHttpUrl(track.url)) {
+      throw new Error("유효한 트랙 URL을 확인할 수 없습니다.");
+    }
+
     return playdl.stream(track.url, { discordPlayerCompatibility: true });
   }
 }
