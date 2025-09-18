@@ -10,12 +10,10 @@ const rest = new REST({ version: "10" }).setToken(token)
 ;(async () => {
   try {
     console.log("기존 명령어 전부 제거 시작")
-
-    // 길드 명령어 전체 삭제
+    
     await rest.put(Routes.applicationGuildCommands(clientId, guildId), { body: [] })
     console.log("길드 명령어 전부 제거 완료")
 
-    // 글로벌 명령어 전체 삭제
     await rest.put(Routes.applicationCommands(clientId), { body: [] })
     console.log("글로벌 명령어 전부 제거 완료")
   } catch (err) {

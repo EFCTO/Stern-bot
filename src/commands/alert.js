@@ -13,8 +13,7 @@ module.exports = {
       opt.setName("message")
         .setDescription("알림 내용")
         .setRequired(true)
-    )
-    .setDefaultMemberPermissions(PermissionFlagsBits.Administrator),
+    ),
 
   async execute(interaction) {
     const title = interaction.options.getString("title");

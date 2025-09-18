@@ -1,4 +1,3 @@
-// src/commands/chzzk.js
 const { SlashCommandBuilder, PermissionFlagsBits } = require("discord.js");
 
 module.exports = {
@@ -19,7 +18,6 @@ module.exports = {
     .addSubcommand(sub => sub.setName("status").setDescription("현재 등록된 치지직 방송 정보를 확인합니다.")),
 
   async execute(interaction) {
-    // ✅ 지연 로드: 배포 시(require 시)에는 실행되지 않음
     const { ensureChzzkService } = require("../modules/chzzk/helpers");
 
     const service = await ensureChzzkService(interaction);
@@ -33,7 +31,6 @@ module.exports = {
 };
 
 async function handleRegister(interaction, service) {
-  // ✅ 지연 로드
   const { searchChannels, getChannel } = require("../modules/chzzk/api");
 
   const nickname = interaction.options.getString("nickname", true).trim();
