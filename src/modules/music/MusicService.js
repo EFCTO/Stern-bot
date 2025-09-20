@@ -380,9 +380,7 @@ class MusicService {
     try {
       const kind = playdl.yt_validate(url);
 
-      // ── YouTube일 때: play-dl → 실패 시 distube ytdl-core 폴백 ──
       if (kind === "video") {
-        // 1) play-dl basic_info → stream_from_info
         try {
           const basic = await playdl.video_basic_info(url);
           if (basic?.video_details) {
@@ -396,7 +394,6 @@ class MusicService {
           console.warn("⚠️ play-dl basic_info 경로 실패:", e1?.message);
         }
 
-        // 2) play-dl video_info → stream_from_info
         try {
           const info = await playdl.video_info(url);
           const s2 = await playdl.stream_from_info(info, {
@@ -408,7 +405,6 @@ class MusicService {
           console.warn("⚠️ play-dl video_info 경로 실패:", e2?.message);
         }
 
-        // 3) @distube/ytdl-core 폴백 (FFmpeg 없이 WebM/Opus만 사용)
         try {
           if (!ytdlDistube) ytdlDistube = require("@distube/ytdl-core");
 
@@ -444,7 +440,6 @@ class MusicService {
         }
       }
 
-      // ── YouTube 외 소스: 기존 play-dl 경로 유지 ──
       const s = await playdl.stream(url, { discordPlayerCompatibility: true });
       if (!s?.stream) throw new Error("stream(url) 결과 없음");
       return s;
