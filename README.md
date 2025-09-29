@@ -2,64 +2,89 @@
 ## 1. 프로젝트 개요
 
 프로젝트명: 홀슈타인 란드 통합 봇
+
 의도:
-* 기존에 분산되어 있던 다수의 디스코드 봇 기능(음악, 관리, 유틸리티, 로그, 게임 등)을 하나의 통합 봇으로 집약.
-* 사용자 경험을 단일화하고 유지보수 효율을 극대화.
-* 중장기적으로 확장 가능한 모듈식 구조를 도입하여 기능 추가 및 업데이트 용이.
+* 기존에 분산돼 있던 음악·유틸·관리·로그 봇 기능을 하나로 통합해 운영 효율과 사용자 경험을 높입니다.
+* 확장 가능한 모듈식 구조를 도입해 유지보수와 기능 추가를 단순화합니다.
 
-## 2. 주요 구현할 기능 목록
+## 2. 현재 기능 요약
 
-**1. 음악봇 기능**
--현재 eara, 하리보, 알로항으로 나누어져 있는 음악 봇을 하나로 통합
-- `/play`: 유튜브 URL 또는 검색어로 곡/플레이리스트 재생 및 대기열 추가
-- `/skip`, `/stop`, `/pause`, `/resume`: 재생 컨트롤
-- `/queue`, `/nowplaying`, `/shuffle`, `/remove`: 대기열 관리와 현재 재생 정보 제공
-**2. 방송알림 기능**
--유튜브 알림, 치지직 방송 알림 등을 출력하는 기능
-**3. 서버 상태 관련 기능**
--ServerStats, Statbot과 같은 상태 관련 기능 구현
-**4. 관리기능**
--미육이, Zira와 같은 관리, 보안, 유틸 기능 구현
+### 음악/오디오
+- `/play`, `/skip`, `/stop`, `/pause`, `/resume`, `/queue`, `/nowplaying`, `/shuffle`, `/remove` 등 통합 큐/플레이어 명령을 제공합니다.
+
+### 방송 알림
+- YouTube/치지직 모듈이 새 영상·방송 시작 시 지정 채널에 임베드와 역할 멘션을 전송합니다.
+- `/debug_youtube`, `/debug_chzzk` 명령으로 알림 임베드를 즉시 프리뷰할 수 있습니다.
+
+### 서버 상태 및 통계
+- MySQL 로그를 기반으로 일간·월간 멤버 통계를 계산합니다.
+- 매일 00:00(Asia/Seoul) 이전날 통계를, 매월 1일 00:00 이전달 통계를 관리 서버(1318259993753161749)의 기술 채널(1318490571844751392)에 자동 게시합니다.
+
+### 역할 온보딩
+- `/rolepanel` 명령으로 역할 선택 패널을 생성합니다.
+- 새 멤버는 DM으로 “환영 + 역할 패널” 메시지를 받고, DM 버튼을 눌러도 메인 서버(879204407496028201)의 역할이 즉시 토글됩니다.
+
+### 관리/보안 유틸리티
+- 기술팀 역할 이상만 사용할 수 있는 `/kick`, `/ban`, `/timeout`, `/party_end`, `/party_destroy` 등을 제공하며, 권한 검증 헬퍼로 보호됩니다.
+- 파티 시스템(COH3/HOI4)은 JSON 저장소와 만료 스케줄러를 통해 자동 정리됩니다.
 
 ## 3. 개발 환경
-* 프로그래밍 언어: JavaScript (Node.js LTS)
-* 디스코드 라이브러리: Discord.js v14
-* 형상 관리: GitHub
-* 데이터 구조 :
-  * MySQL (주력) > 유저 데이터, 로그 기록 등 영속적 저장
-  * Redis (보조)  > 실시간 캐싱 (쿨다운, 랭킹, 세션 관리 등)
-  * JSON (단기) > 임시 데이터 저장, 파일 캐시, 환경 설정 등등
+- 언어: JavaScript (Node.js LTS)
+- Discord 라이브러리: discord.js v14
+- 영속 데이터: MySQL (users, logs, stats)
+- 캐시/세션: Redis (선택)
+- 파일 저장: JSON(`data/parties.json`, `data/youtube.json` 등)
+- 형상 관리: GitHub
 
-## 4. 아키텍처 구성
+## 4. 아키텍처 개요
 
 | 계층 | 설명 |
 | --- | --- |
-| `src/core` | Discord 클라이언트 초기화와 명령어/인터랙션/이벤트 로더를 담당하는 BotClient 구현체 및 공통 로더. |
-| `src/events` | `ready`, `interactionCreate` 등 Discord 이벤트 핸들러 모음. |
-| `src/commands` | Slash 명령어 모듈. 각 명령은 도메인 서비스에 의존하며 UI 요소는 최소화. |
-| `src/interactions` | 버튼/모달/셀렉트 메뉴 등 컴포넌트별 핸들러. 명령과 분리하여 재사용과 테스트 용이. |
-| `src/modules/party` | 파티 도메인 로직(엔티티, 리포지토리, 서비스, 임베드, 라이프사이클, 헬퍼) 캡슐화. |
-| `src/services` | 애플리케이션 전역에서 재사용되는 서비스 인스턴스 초기화·종료. |
+| `src/core` | BotClient, 명령/인터랙션/이벤트 로더, 서비스 레지스트리 |
+| `src/events` | Discord 이벤트 핸들러(`ready`, `interactionCreate`, `guildMemberAdd` 등) |
+| `src/commands` | Slash 명령 모듈(음악·방송 알림·관리·파티 등) |
+| `src/interactions` | 버튼/모달/셀렉트 메뉴 등 UI 컴포넌트 핸들러 |
+| `src/modules/*` | 도메인 서비스 및 리포지토리 (파티, 음악, 방송 알림 등) |
+| `src/jobs` | 주기 작업 (`statsScheduler` 등) |
+| `src/services` | 전역 서비스 인스턴스 초기화/종료 관리 |
 
-### 서비스 주입 구조
-* `BotClient.registerService(name, instance)`로 서비스 등록 후, `interaction.client.getService(name)`을 통해 어디서든 접근 가능.
-* 상호작용 핸들러는 `ensurePartyService` 헬퍼를 사용해 서비스 초기화 여부를 확인하고, 미준비 시 사용자에게 안내 메시지를 보냅니다.
+### 서비스 주입
+- `client.registerService(name, instance)`로 서비스 등록 후 `client.getService(name)`으로 조회합니다.
+- `ensurePartyService`, `ensureYoutubeService` 등 헬퍼가 서비스 준비 여부를 확인하고 사용자에게 안내합니다.
 
 ## 5. 파티 시스템 흐름
 
-1. 사용자가 `/coh3_create`, `/hoi4_create` 명령을 실행하면 `PartyService`가 초안(draft)을 생성하고 설정용 컴포넌트와 모달을 제공합니다.
-2. 버튼/모달/셀렉트 인터랙션 핸들러가 초안을 갱신하며, "생성" 버튼을 누르면 Discord 메시지를 발행하고 초안을 실제 파티로 승격합니다.
-3. 파티 데이터는 `PartyRepository`를 통해 JSON 파일에 지속 저장되어 재시작 시 복구 가능합니다.
-4. `PartyService`의 만료 스케줄러가 24시간이 지난 파티를 감지하고 `closeParty` 라이프사이클 함수를 호출해 메시지를 정리 및 알림을 전송합니다.
-5. 클라이언트 종료 시 `shutdownServices`가 호출되어 만료 스케줄러 등 백그라운드 작업을 안전하게 정리합니다.
+1. `/coh3_create`, `/hoi4_create` 실행 → `PartyService`가 초안(draft)과 UI 컴포넌트를 생성합니다.
+2. 버튼/모달을 통해 초안을 갱신하고 “생성” 시 Discord 메시지로 승격합니다.
+3. 파티 데이터는 `PartyRepository`가 JSON(`data/parties.json`)에 저장하여 재시작 시 복구됩니다.
+4. 24시간 만료 스케줄러가 지난 파티를 `closeParty`로 종료하고 알림 메시지를 전송합니다.
+5. 종료 시(`SIGINT`, `SIGTERM`) `shutdownServices`가 백그라운드 작업을 안전하게 정리합니다.
 
-## 6. 개발/배포 메모
+## 6. 운영/배포 메모
 
-* `DISCORD_TOKEN` 등 환경 변수는 `.env`로 관리합니다.
-* 명령/인터랙션을 추가할 경우 해당 디렉터리에 JS 파일을 추가하면 BotClient가 자동으로 로드합니다.
-* JSON 저장소(`data/parties.json`)는 활성 파티만 저장하며, 종료 시 자동 정리됩니다.
-* 프로세스 종료 시(`SIGINT`, `SIGTERM`) 등록된 서비스가 먼저 정리되고 Discord 클라이언트가 종료되도록 `registerShutdownHandlers`가 구성되어 있습니다.
+### 주요 환경 변수
+| 키 | 설명 |
+| --- | --- |
+| `DISCORD_TOKEN`, `CLIENT_ID` | Discord 봇 토큰, 애플리케이션 ID |
+| `MYSQL_HOST`, `MYSQL_USER`, `MYSQL_PASSWORD`, `MYSQL_DATABASE` | MySQL 연결 정보 |
+| `ROLE_PANEL_GUILD_ID` | DM 역할 패널이 적용될 서버 ID (기본 879204407496028201) |
+| `REQUIRED_TECH_ROLE_ID` | 기술팀 전용 명령 사용 권한 역할 ID |
+| `STATS_GUILD_ID` / `STATS_CHANNEL_ID` | 일간/월간 통계 전송 대상 (기본 1318259993753161749 / 1318490571844751392) |
+| `STATS_TZ` | 통계 스케줄 타임존 (기본 Asia/Seoul) |
+| `GUILD_IDS` | 명령 배포 대상 길드 목록(콤마 구분, 기본 `879204407496028201,1318259993753161749`) |
 
-## 7.기여 
-https://discord.gg/8Vnz49nJ 해당 디스코드에 참여 후 PR을 보내주세요 
+### 배포 절차
+```
+npm install        # 최초 혹은 패키지 변경 시
+node src/scripts/deploy-commands.js
+```
+- 지정된 길드(기본 두 서버)에 Slash 명령을 즉시 반영합니다.
+- 다른 서버에 배포하려면 `GUILD_IDS` 환경 변수를 수정하세요.
 
+### 기타 운영 참고 사항
+- `guildMemberAdd` 이벤트가 새 유저에게 DM 역할 패널을 전송하므로 DM 차단 시 로그를 확인하세요.
+- 방송 알림 저장소(`data/youtube.json`, `data/chzzk.json`)는 쓰기 가능해야 합니다.
+- 통계 스케줄러는 매일/매월 실행 결과를 콘솔에 기록하며 실패 시 오류를 출력합니다.
+
+## 7. 기여
+프로젝트에 기여하거나 이슈를 제보하려면 [Discord 서버](https://discord.gg/8Vnz49nJ)에 참여한 뒤 PR 또는 이슈로 남겨주세요.
