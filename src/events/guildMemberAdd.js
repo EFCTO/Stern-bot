@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require("discord.js");
 const { getPool } = require("../db/mysql");
+const { buildRolePanelPayload } = require("../utils/rolePanel");
 
 module.exports = {
   name: "guildMemberAdd",
@@ -18,6 +19,21 @@ module.exports = {
             .setImage(avatar)
             .setTimestamp();
           await ch.send({ embeds: [emb] });
+        }
+      }
+
+      try {
+        const { embed, components } = buildRolePanelPayload();
+        const displayName = member.displayName || member.user.username;
+        await member.send({
+          content: `홀슈타인 란드에 오신 걸 환영합니다 ${displayName}님!\n아래 역할 패널에서 원하시는 역할을 선택해 주세요!`,
+          embeds: [embed],
+          components,
+        });
+      } catch (error) {
+        // DM이 막혀 있을 수 있으니 조용히 무시
+        if (process.env.DEBUG_DM_FAILURE === "true") {
+          console.warn("[guildMemberAdd] failed to DM role panel", error);
         }
       }
 

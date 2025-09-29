@@ -1,13 +1,27 @@
 // src/modules/youtube/api.js
 const https = require("node:https");
 
+const DEFAULT_HEADERS = {
+  "Accept-Encoding": "identity",
+  "User-Agent": "HolsteinLandBot/1.0 (+discord)"
+};
+
+function mergeHeaders(extra) {
+  return { ...DEFAULT_HEADERS, ...(extra || {}) };
+}
+
 // 간단한 GET(JSON)
 function getJSON(url, headers = {}) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers }, res => {
+    const req = https.get(url, { headers: mergeHeaders(headers) }, res => {
+      res.setEncoding("utf8");
       let data = "";
       res.on("data", c => (data += c));
       res.on("end", () => {
+        if (res.statusCode && res.statusCode >= 400) {
+          reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage || ""}`.trim()));
+          return;
+        }
         try {
           resolve(JSON.parse(data));
         } catch (e) {
@@ -22,10 +36,17 @@ function getJSON(url, headers = {}) {
 // 간단한 GET(텍스트)
 function getText(url, headers = {}) {
   return new Promise((resolve, reject) => {
-    const req = https.get(url, { headers }, res => {
+    const req = https.get(url, { headers: mergeHeaders(headers) }, res => {
+      res.setEncoding("utf8");
       let data = "";
       res.on("data", c => (data += c));
-      res.on("end", () => resolve(data));
+      res.on("end", () => {
+        if (res.statusCode && res.statusCode >= 400) {
+          reject(new Error(`HTTP ${res.statusCode} ${res.statusMessage || ""}`.trim()));
+          return;
+        }
+        resolve(data);
+      });
     });
     req.on("error", reject);
   });
@@ -109,22 +130,34 @@ async function fetchLatestVideo(channelId) {
     }
   }
 
-  // RSS fallback
-  const xml = await getText(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`);
-  // 첫 entry
-  const entry = xml.match(/<entry>[\s\S]*?<\/entry>/);
-  if (!entry) return null;
+  // RSS fallback (try uploads playlist first, then channel feed)
+  const feedCandidates = [];
+  if (channelId.startsWith("UC") && channelId.length > 2) {
+    const uploadsId = `UU${channelId.slice(2)}`;
+    feedCandidates.push(`https://www.youtube.com/feeds/videos.xml?playlist_id=${uploadsId}`);
+  }
+  feedCandidates.push(`https://www.youtube.com/feeds/videos.xml?channel_id=${channelId}`);
 
-  const vid = entry[0].match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
-  const title = entry[0].match(/<title>([^<]+)<\/title>/);
-  const pub = entry[0].match(/<published>([^<]+)<\/published>/);
+  for (const url of feedCandidates) {
+    const xml = await getText(url).catch(() => null);
+    if (!xml) continue;
 
-  if (!vid) return null;
-  return {
-    videoId: vid[1],
-    title: title ? title[1] : "새 영상",
-    publishedAt: pub ? pub[1] : null
-  };
+    const entry = xml.match(/<entry>[\s\S]*?<\/entry>/);
+    if (!entry) continue;
+
+    const vid = entry[0].match(/<yt:videoId>([^<]+)<\/yt:videoId>/);
+    const title = entry[0].match(/<title>([^<]+)<\/title>/);
+    const pub = entry[0].match(/<published>([^<]+)<\/published>/);
+
+    if (!vid) continue;
+    return {
+      videoId: vid[1],
+      title: title ? title[1] : "새 영상",
+      publishedAt: pub ? pub[1] : null
+    };
+  }
+
+  return null;
 }
 
 module.exports = {

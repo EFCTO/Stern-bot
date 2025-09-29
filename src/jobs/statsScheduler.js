@@ -1,10 +1,12 @@
-const cron = require("node-cron");
+﻿const cron = require("node-cron");
 const { EmbedBuilder } = require("discord.js");
 const { getPool } = require("../db/mysql");
 
-/** 통계: 지정 일자(로컬 날짜 문자열 'YYYY-MM-DD') */
+const DEFAULT_STATS_GUILD_ID = "1318259993753161749";
+const DEFAULT_STATS_CHANNEL_ID = "1318490571844751392";
+const DEFAULT_TZ = "Asia/Seoul";
+
 async function computeDaily(pool, dateStr) {
-  // joins, leaves
   const [j] = await pool.query(
     `SELECT COUNT(*) AS c FROM membership_log
      WHERE event='join' AND DATE(occurred_at)=?`, [dateStr]
@@ -13,15 +15,13 @@ async function computeDaily(pool, dateStr) {
     `SELECT COUNT(*) AS c FROM membership_log
      WHERE event='leave' AND DATE(occurred_at)=?`, [dateStr]
   );
-
-  // new_joins: users.first_seen이 해당 날짜
   const [n] = await pool.query(
     `SELECT COUNT(*) AS c FROM users WHERE DATE(first_seen)=?`, [dateStr]
   );
 
-  const joins = j[0].c|0;
-  const leaves = l[0].c|0;
-  const new_joins = n[0].c|0;
+  const joins = j[0].c | 0;
+  const leaves = l[0].c | 0;
+  const new_joins = n[0].c | 0;
   const retention = joins - leaves;
 
   await pool.query(
@@ -35,7 +35,6 @@ async function computeDaily(pool, dateStr) {
   return { joins, leaves, new_joins, retention };
 }
 
-/** 월간: 'YYYY-MM' */
 async function computeMonthly(pool, ym) {
   const [j] = await pool.query(
     `SELECT COUNT(*) AS c FROM membership_log
@@ -50,9 +49,9 @@ async function computeMonthly(pool, ym) {
      WHERE DATE_FORMAT(first_seen,'%Y-%m')=?`, [ym]
   );
 
-  const joins = j[0].c|0;
-  const leaves = l[0].c|0;
-  const new_joins = n[0].c|0;
+  const joins = j[0].c | 0;
+  const leaves = l[0].c | 0;
+  const new_joins = n[0].c | 0;
   const retention = joins - leaves;
 
   await pool.query(
@@ -68,69 +67,97 @@ async function computeMonthly(pool, ym) {
 
 function toYMD(d) {
   const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2, "0");
+  const m = String(d.getMonth() + 1).padStart(2, "0");
   const day = String(d.getDate()).padStart(2, "0");
   return `${y}-${m}-${day}`;
 }
 
 function toYM(d) {
   const y = d.getFullYear();
-  const m = String(d.getMonth()+1).padStart(2, "0");
+  const m = String(d.getMonth() + 1).padStart(2, "0");
   return `${y}-${m}`;
 }
 
+async function resolveChannel(client, channelId) {
+  if (!channelId) return null;
+  const cached = client.channels.cache.get(channelId);
+  if (cached?.isTextBased()) return cached;
+  try {
+    const fetched = await client.channels.fetch(channelId);
+    return fetched?.isTextBased() ? fetched : null;
+  } catch {
+    return null;
+  }
+}
+
 function startStatsJobs(client) {
-  const statsChannelId = process.env.STATS_CHANNEL_ID;
+  const statsChannelId = process.env.STATS_CHANNEL_ID || DEFAULT_STATS_CHANNEL_ID;
+  const statsGuildId = process.env.STATS_GUILD_ID || DEFAULT_STATS_GUILD_ID;
+  const timezone = process.env.STATS_TZ || DEFAULT_TZ;
 
-  // 매일 0시 (Asia/Seoul 은 .env TZ로 지정)
+  async function sendDaily(ymd, payload) {
+    const channel = await resolveChannel(client, statsChannelId);
+    if (!channel) return;
+
+    const emb = new EmbedBuilder()
+      .setColor(0x5865F2)
+      .setTitle(`📊 Daily Stats (${ymd})`)
+      .setDescription([
+        `Joins : **${payload.joins}**`,
+        `Leaves : **${payload.leaves}**`,
+        `New Joins : **${payload.new_joins}**`,
+        `Net Change : **${payload.retention}** (joins - leaves)`
+      ].join("\n"))
+      .setFooter({ text: `Guild ${statsGuildId}` })
+      .setTimestamp();
+
+    await channel.send({ embeds: [emb] });
+  }
+
+  async function sendMonthly(ym, payload) {
+    const channel = await resolveChannel(client, statsChannelId);
+    if (!channel) return;
+
+    const emb = new EmbedBuilder()
+      .setColor(0xFEE75C)
+      .setTitle(`📈 Monthly Stats (${ym})`)
+      .setDescription([
+        `Joins : **${payload.joins}**`,
+        `Leaves : **${payload.leaves}**`,
+        `New Joins : **${payload.new_joins}**`,
+        `Net Change : **${payload.retention}** (joins - leaves)`
+      ].join("\n"))
+      .setFooter({ text: `Guild ${statsGuildId}` })
+      .setTimestamp();
+
+    await channel.send({ embeds: [emb] });
+  }
+
   cron.schedule("0 0 * * *", async () => {
-    const pool = await getPool();
-    const today = new Date(); // 0시 트리거: 직전 날짜 집계가 필요하면 하루 빼도 됨
-    const ymd = toYMD(today);
-    const { joins, leaves, new_joins, retention } = await computeDaily(pool, ymd);
-
-    if (statsChannelId) {
-      const ch = client.channels.cache.get(statsChannelId);
-      if (ch && ch.isTextBased()) {
-        const emb = new EmbedBuilder()
-          .setColor(0x5865F2)
-          .setTitle(`📊 일간 통계 (${ymd})`)
-          .setDescription([
-            `입장유저 : **${joins}**`,
-            `퇴장유저 : **${leaves}**`,
-            `신규입장유저 : **${new_joins}**`,
-            `유지인원 : **${retention}** (입장 - 퇴장)`
-          ].join("\n"))
-          .setTimestamp();
-        await ch.send({ embeds: [emb] });
-      }
+    try {
+      const pool = await getPool();
+      const target = new Date();
+      target.setDate(target.getDate() - 1);
+      const ymd = toYMD(target);
+      const payload = await computeDaily(pool, ymd);
+      await sendDaily(ymd, payload);
+    } catch (error) {
+      console.error("[StatsScheduler] daily job failed", error);
     }
-  });
+  }, { timezone });
 
-  // 매월 1일 0시
   cron.schedule("0 0 1 * *", async () => {
-    const pool = await getPool();
-    const today = new Date();
-    const ym = toYM(today);
-    const { joins, leaves, new_joins, retention } = await computeMonthly(pool, ym);
-
-    if (statsChannelId) {
-      const ch = client.channels.cache.get(statsChannelId);
-      if (ch && ch.isTextBased()) {
-        const emb = new EmbedBuilder()
-          .setColor(0xFEE75C)
-          .setTitle(`📈 월간 통계 (${ym})`)
-          .setDescription([
-            `입장유저 : **${joins}**`,
-            `퇴장유저 : **${leaves}**`,
-            `신규입장유저 : **${new_joins}**`,
-            `유지인원 : **${retention}** (입장 - 퇴장)`
-          ].join("\n"))
-          .setTimestamp();
-        await ch.send({ embeds: [emb] });
-      }
+    try {
+      const pool = await getPool();
+      const target = new Date();
+      target.setMonth(target.getMonth() - 1);
+      const ym = toYM(target);
+      const payload = await computeMonthly(pool, ym);
+      await sendMonthly(ym, payload);
+    } catch (error) {
+      console.error("[StatsScheduler] monthly job failed", error);
     }
-  });
+  }, { timezone });
 }
 
 module.exports = { startStatsJobs };

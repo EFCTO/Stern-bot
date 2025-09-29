@@ -73,6 +73,10 @@ function registerShutdownHandlers(client, shutdownServices) {
     console.log(`${label ?? "PROCESS_EXIT"} 감지, 종료 처리 중...`);
     try {
       await shutdownServices?.();
+
+      const youtubeService = client.getService?.("youtube");
+      youtubeService?.stop?.();
+
       await client.destroy();
       console.log("🧹 종료 완료");
     } catch (err) {

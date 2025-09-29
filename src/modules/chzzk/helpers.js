@@ -1,3 +1,5 @@
+const ChzzkService = require("./ChzzkService");
+
 function getChzzkService(client) {
   if (!client || typeof client.getService !== "function") {
     return null;
@@ -6,7 +8,24 @@ function getChzzkService(client) {
 }
 
 async function ensureChzzkService(interaction) {
-  const service = getChzzkService(interaction?.client);
+  const client = interaction?.client;
+  let service = getChzzkService(client);
+  if (service && typeof service.sendDebugNotification !== "function") {
+    const repository = service.repository ?? null;
+    if (repository) {
+      const replacement = new ChzzkService(repository, { pollInterval: service.pollInterval });
+      replacement.broadcaster = service.broadcaster ? { ...service.broadcaster } : null;
+      if (typeof service.shutdown === "function") {
+        await service.shutdown().catch(() => {});
+      }
+      client?.registerService?.("chzzk", replacement);
+      service = replacement;
+      if (client) {
+        await service.start(client).catch(() => {});
+      }
+    }
+  }
+
   if (service) {
     return service;
   }
