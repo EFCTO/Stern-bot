@@ -87,3 +87,4 @@ node src/scripts/deploy-commands.js
 
 ## 7. 기여
 프로젝트에 기여하거나 이슈를 제보하려면 [Discord 서버](https://discord.gg/8Vnz49nJ)에 참여한 뒤 PR 또는 이슈로 남겨주세요.
+"# Stern-bot" 
