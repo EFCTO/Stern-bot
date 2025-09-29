@@ -19,7 +19,6 @@ function hasTechRoleOrHigher(member) {
 
   const targetRole = resolveTargetRole(member);
   if (!targetRole) {
-    // If the role is missing (perhaps deleted), fall back to explicit possession only.
     return false;
   }
 
