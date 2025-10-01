@@ -20,23 +20,34 @@ module.exports = {
 
       const pool = await getPool();
       const now = new Date();
+      const guildId = member.guild?.id ?? null;
+      const username = member.user?.username ?? null;
+      const displayName = member.nickname ?? username ?? null;
 
       await pool.query(
         `UPDATE users
-            SET last_seen = ?, last_display = COALESCE(?, last_display), last_username = COALESCE(?, last_username)
+            SET guild_id = COALESCE(?, guild_id),
+                username = COALESCE(?, username),
+                display_name = COALESCE(?, display_name),
+                last_seen = ?,
+                last_display = COALESCE(?, last_display),
+                last_username = COALESCE(?, last_username)
           WHERE user_id = ?`,
         [
+          guildId,
+          username,
+          displayName,
           now,
-          member.nickname ?? member.user?.username ?? null,
-          member.user?.username ?? null,
+          displayName,
+          username,
           member.id
         ]
       );
 
       await pool.query(
-        `INSERT INTO membership_log (user_id, event, occurred_at)
-         VALUES (?, 'leave', ?)`,
-        [member.id, now]
+        `INSERT INTO membership_log (user_id, guild_id, event, occurred_at)
+         VALUES (?, ?, 'leave', ?)`,
+        [member.id, guildId, now]
       );
     } catch (err) {
       console.error("[guildMemberRemove] error", err);

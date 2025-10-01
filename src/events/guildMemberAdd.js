@@ -24,9 +24,9 @@ module.exports = {
 
       try {
         const { embed, components } = buildRolePanelPayload();
-        const displayName = member.displayName || member.user.username;
+        const welcomeName = member.displayName || member.user.username;
         await member.send({
-          content: `홀슈타인 란드에 오신 걸 환영합니다 ${displayName}님!\n아래 역할 패널에서 원하시는 역할을 선택해 주세요!`,
+          content: `홀슈타인 란드에 오신 걸 환영합니다 ${welcomeName}님!\n아래 역할 패널에서 원하시는 역할을 선택해 주세요!`,
           embeds: [embed],
           components,
         });
@@ -41,36 +41,52 @@ module.exports = {
       const now = new Date();
 
       const [rows] = await pool.query("SELECT user_id FROM users WHERE user_id = ?", [member.id]);
+      const guildId = member.guild?.id ?? null;
+      const username = member.user?.username ?? null;
+      const displayName = member.displayName ?? username;
+
       if (rows.length === 0) {
         await pool.query(
-          `INSERT INTO users (user_id, first_seen, last_seen, last_display, last_username, join_count)
-           VALUES (?, ?, ?, ?, ?, 1)`,
+          `INSERT INTO users (user_id, guild_id, username, display_name, first_seen, last_seen, last_display, last_username, join_count)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, 1)`,
           [
             member.id,
+            guildId,
+            username,
+            displayName,
             now,
             now,
-            member.displayName ?? member.user.username,
-            member.user.username
+            displayName,
+            username
           ]
         );
       } else {
         await pool.query(
           `UPDATE users
-             SET last_seen = ?, last_display = ?, last_username = ?, join_count = join_count + 1
+             SET guild_id = COALESCE(?, guild_id),
+                 username = COALESCE(?, username),
+                 display_name = COALESCE(?, display_name),
+                 last_seen = ?,
+                 last_display = ?,
+                 last_username = ?,
+                 join_count = join_count + 1
            WHERE user_id = ?`,
           [
+            guildId,
+            username,
+            displayName,
             now,
-            member.displayName ?? member.user.username,
-            member.user.username,
+            displayName,
+            username,
             member.id
           ]
         );
       }
 
       await pool.query(
-        `INSERT INTO membership_log (user_id, event, occurred_at)
-         VALUES (?, 'join', ?)`,
-        [member.id, now]
+        `INSERT INTO membership_log (user_id, guild_id, event, occurred_at)
+         VALUES (?, ?, 'join', ?)`,
+        [member.id, guildId, now]
       );
     } catch (err) {
       console.error("[guildMemberAdd] error", err);

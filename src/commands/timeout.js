@@ -1,7 +1,7 @@
 const { SlashCommandBuilder } = require("discord.js");
 const { ensureTechRole } = require("../utils/permissions");
 
-const MAX_TIMEOUT_MINUTES = 40320; // 28 days
+const MAX_TIMEOUT_MINUTES = 40320; // 28일
 
 module.exports = {
   data: new SlashCommandBuilder()

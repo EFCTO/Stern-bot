@@ -7,10 +7,11 @@
     "ffmpeg-static": "^5.2.0",
     "libsodium-wrappers": "^0.7.15",
     "mysql2": "^3.14.5",
+    "node-cron": "^4.2.1",
     "opusscript": "^0.0.8",
     "play-dl": "^1.9.7",
     "redis": "^5.8.2",
     "sharp": "^0.34.4",
-    "ytdl-core": "4.11.5"
+    "ytdl-core": "^4.11.5"
   }
 }
