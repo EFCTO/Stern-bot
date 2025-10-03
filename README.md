@@ -87,4 +87,4 @@ node src/scripts/deploy-commands.js
 - 통계 스케줄러는 매일/매월 실행 결과를 콘솔에 기록하며 실패 시 오류를 출력합니다.
 
 ## 7. 기여
-프로젝트에 기여하거나 이슈를 제보하려면 [Discord 서버](https://discord.gg/8Vnz49nJ)에 참여한 뒤 PR 또는 이슈로 남겨주세요.
+프로젝트에 기여하거나 이슈를 제보하려면 [홀슈타인 란드 서버](https://discord.gg/8Vnz49nJ)에 참여한 뒤 PR 또는 이슈로 남겨주세요.
