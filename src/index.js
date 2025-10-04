@@ -15,7 +15,7 @@ const services = require("./services");
 async function bootstrap() {
   const token = process.env.DISCORD_TOKEN;
   if (!token) {
-    console.error("❌ DISCORD_TOKEN 이 .env 에 없습니다.");
+    console.error("??DISCORD_TOKEN ??.env ???�습?�다.");
     process.exit(1);
   }
 
@@ -39,6 +39,7 @@ async function bootstrap() {
   if (services.partyService)  client.registerService("party",  services.partyService);
   if (services.musicService)  client.registerService("music",  services.musicService);
   if (services.chzzkService)  client.registerService("chzzk",  services.chzzkService);
+  if (services.officialMultiService)  client.registerService("officialMulti",  services.officialMultiService);
 
   if (services.youtubeService) {
     client.registerService("youtube", services.youtubeService);
@@ -49,7 +50,7 @@ async function bootstrap() {
   registerShutdownHandlers(client, services.shutdownServices);
 
   await client.login(token);
-  console.log("✅ Logged in and ready.");
+  console.log("??Logged in and ready.");
 
   try {
     const report = generateDependencyReport();
@@ -60,7 +61,7 @@ async function bootstrap() {
 
 function registerShutdownHandlers(client, shutdownServices) {
   const safeExit = async (label, code) => {
-    console.log(`${label ?? "PROCESS_EXIT"} 감지, 종료 처리 중...`);
+    console.log(`${label ?? "PROCESS_EXIT"} 감�?, 종료 처리..`);
     try {
       await shutdownServices?.();
 
@@ -68,9 +69,9 @@ function registerShutdownHandlers(client, shutdownServices) {
       youtubeService?.stop?.();
 
       await client.destroy();
-      console.log("🧹 종료 완료");
+      console.log("?�� 종료 ?�료");
     } catch (err) {
-      console.error("종료 처리 중 오류:", err);
+      console.error("종료 처리 �??�류:", err);
     } finally {
       process.exit(typeof code === "number" ? code : 0);
     }
@@ -89,6 +90,7 @@ function registerShutdownHandlers(client, shutdownServices) {
 }
 
 bootstrap().catch((err) => {
-  console.error("봇 초기화 실패:", err);
+  console.error("�?초기???�패:", err);
   process.exit(1);
 });
+

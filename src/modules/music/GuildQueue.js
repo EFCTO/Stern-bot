@@ -43,12 +43,21 @@ class GuildQueue {
     this.audioPlayer.on(AudioPlayerStatus.Idle, () => {
       this.current = null;
       this.startedAt = null;
-      this.#processQueue().catch(error => console.error("대기열 처리 실패", error));
+      this.#processQueue().catch(error => console.error("재생 대기열 처리 실패", error));
     });
 
     this.audioPlayer.on("error", error => {
       console.error(`길드 ${guild.id} 오디오 플레이어 오류`, error);
-      this.#processQueue().catch(err => console.error("대기열 처리 실패", err));
+
+      const message = error?.message || "";
+      if (/Status code:\s*403/.test(message) && this.current && !this.current.forceYtDlp) {
+        console.warn("403 응답 감지 – yt-dlp 오디오 스트림으로 재시도합니다.", summarizeTrack(this.current));
+        this.queue.unshift({ ...this.current, forceYtDlp: true });
+      }
+
+      this.current = null;
+      this.startedAt = null;
+      this.#processQueue().catch(err => console.error("재생 큐 처리 실패", err));
     });
 
     this.queue = [];

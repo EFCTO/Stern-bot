@@ -131,9 +131,9 @@ class ChzzkService {
 
     const embed = new EmbedBuilder()
       .setColor(0x03c75a)
-      .setTitle(liveInfo?.liveTitle || `${broadcaster.channelName} is live!`)
+      .setTitle(liveInfo?.liveTitle || `${broadcaster.channelName} 님의 라이브 스트림`)
       .setURL(liveUrl)
-      .setDescription(`**${broadcaster.channelName}** just went live on Chzzk!`)
+      .setDescription(`**${broadcaster.channelName}** 님이 방송을 시작했어요!`)
       .setTimestamp(liveInfo?.openDate ? new Date(liveInfo.openDate) : new Date());
 
     if (broadcaster.profileImageUrl) {
@@ -167,7 +167,7 @@ class ChzzkService {
 
     await channel
       .send({
-        content: content ?? `[LIVE] <@&${ALERT_ROLE_ID}> **${broadcaster.channelName}** is live now!\n${liveUrl}`,
+        content: content ?? `[LIVE] <@&${ALERT_ROLE_ID}> **${broadcaster.channelName}**님의 라이브가 시작됐어요!\n${liveUrl}`,
         embeds: [embed],
         allowedMentions: allowedMentions ?? { roles: [ALERT_ROLE_ID], users: [] },
         files: files.length ? files : undefined,
@@ -212,7 +212,7 @@ class ChzzkService {
       overrideChannel: targetChannel,
       broadcaster,
       thumbnailAttachment: attachment,
-      content: mentionContent ?? `[LIVE] <@&${ALERT_ROLE_ID}> Debug live notification preview!\nhttps://chzzk.naver.com/live/${broadcaster.channelId}`,
+      content: mentionContent ?? `[LIVE] <@&${ALERT_ROLE_ID}> 디버그 라이브 방송이 시작됐어요!\nhttps://chzzk.naver.com/live/${broadcaster.channelId}`,
       allowedMentions: allowedMentions ?? { parse: [] },
     });
   }

@@ -1,0 +1,48 @@
+{
+  "1423293709167886388": {
+    "hostId": "1077917918844694528",
+    "channelId": "1413928068036296765",
+    "messageId": "1423293709167886388",
+    "multiId": "테스트",
+    "password": "ㅁ",
+    "status": "ended",
+    "createdAt": "2025-10-02T13:01:03.809Z",
+    "startedAt": null,
+    "endedAt": "2025-10-02T16:21:21.143Z",
+    "participants": [],
+    "blockedUserIds": []
+  },
+  "1423341023484182651": {
+    "hostId": "1077917918844694528",
+    "channelId": "1413928068036296765",
+    "messageId": "1423341023484182651",
+    "multiId": "1234",
+    "password": "1234",
+    "status": "ended",
+    "createdAt": "2025-10-02T16:09:04.067Z",
+    "startedAt": null,
+    "endedAt": "2025-10-02T16:20:54.225Z",
+    "participants": [
+      {
+        "userId": "762296261650415657",
+        "nickname": "위드고",
+        "country": "슈퍼울트라와샌즈게르마니아",
+        "joinedAt": "2025-10-02T16:09:55.330Z"
+      }
+    ],
+    "blockedUserIds": []
+  },
+  "1423341552335327263": {
+    "hostId": "1077917918844694528",
+    "channelId": "1113814922263023677",
+    "messageId": "1423341552335327263",
+    "multiId": "1234",
+    "password": "1234",
+    "status": "ended",
+    "createdAt": "2025-10-02T16:11:10.215Z",
+    "startedAt": null,
+    "endedAt": "2025-10-02T16:21:49.527Z",
+    "participants": [],
+    "blockedUserIds": []
+  }
+}

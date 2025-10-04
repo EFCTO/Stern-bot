@@ -1,0 +1,5 @@
+const OFFICIAL_MULTI_ROLE_ID = "1313044605054488626";
+
+module.exports = {
+  OFFICIAL_MULTI_ROLE_ID
+};
