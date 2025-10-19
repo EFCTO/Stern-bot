@@ -136,6 +136,10 @@ function startStatsJobs(client) {
   cron.schedule("0 0 * * *", async () => {
     try {
       const pool = await getPool();
+      if (!pool) {
+        console.warn("[StatsScheduler] Skip daily job: MySQL pool unavailable.");
+        return;
+      }
       const target = new Date();
       target.setDate(target.getDate() - 1);
       const ymd = toYMD(target);
@@ -149,6 +153,10 @@ function startStatsJobs(client) {
   cron.schedule("0 0 1 * *", async () => {
     try {
       const pool = await getPool();
+      if (!pool) {
+        console.warn("[StatsScheduler] Skip monthly job: MySQL pool unavailable.");
+        return;
+      }
       const target = new Date();
       target.setMonth(target.getMonth() - 1);
       const ym = toYM(target);

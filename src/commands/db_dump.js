@@ -58,6 +58,10 @@ async execute(interaction) {
     const includeBots = interaction.options.getBoolean("include_bots") ?? true;
 
     const pool = await getPool();
+    if (!pool) {
+      await interaction.editReply("데이터베이스 연결을 사용할 수 없어 덤프를 만들지 못했습니다. 잠시 후 다시 시도해 주세요.");
+      return;
+    }
 
     const where = includeBots ? "" : "WHERE is_bot = 0";
     const [rows] = await pool.query(

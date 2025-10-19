@@ -19,6 +19,12 @@ module.exports = {
       }
 
       const pool = await getPool();
+      if (!pool) {
+        if (process.env.DEBUG_DB_FAILURE === "true") {
+          console.warn("[guildMemberRemove] Skip database logging: MySQL pool unavailable.");
+        }
+        return;
+      }
       const now = new Date();
       const guildId = member.guild?.id ?? null;
       const username = member.user?.username ?? null;

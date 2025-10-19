@@ -1,4 +1,4 @@
-const fs = require("node:fs");
+﻿const fs = require("node:fs");
 const path = require("node:path");
 const { EmbedBuilder } = require("discord.js");
 const { fetchLatestVideo, getChannelTitle } = require("./api");
@@ -138,7 +138,7 @@ class YoutubeService {
 
     await targetChannel
       .send({
-        content: content ?? `[YouTube] <@&${ALERT_ROLE_ID}> **${this.state.channelTitle || "Channel"}** posted a new video!\n${url}`,
+        content: content ?? `[YouTube] <@&${ALERT_ROLE_ID}> **${this.state.channelTitle || "Channel"}** 님의 영상이 올라왔습니다!\n${url}`,
         embeds: [embed],
         allowedMentions: allowedMentions ?? { roles: [ALERT_ROLE_ID], users: [] },
         files: files.length ? files : undefined,

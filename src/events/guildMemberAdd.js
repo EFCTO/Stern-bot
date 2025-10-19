@@ -38,6 +38,12 @@ module.exports = {
       }
 
       const pool = await getPool();
+      if (!pool) {
+        if (process.env.DEBUG_DB_FAILURE === "true") {
+          console.warn("[guildMemberAdd] Skip database logging: MySQL pool unavailable.");
+        }
+        return;
+      }
       const now = new Date();
 
       const [rows] = await pool.query("SELECT user_id FROM users WHERE user_id = ?", [member.id]);

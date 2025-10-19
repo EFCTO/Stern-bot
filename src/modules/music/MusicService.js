@@ -3,9 +3,18 @@ let ytdlDistube; // 吏??濡쒕뱶
 
 
 const playdl = require("play-dl");
+const ffmpegStatic = require("ffmpeg-static");
 const GuildQueue = require("./GuildQueue");
 const Track = require("./Track");
 const { createYtDlpAudioStream } = require("./ytDlpStream");
+
+if (ffmpegStatic && typeof playdl.setFfmpegPath === "function") {
+  try {
+    playdl.setFfmpegPath(ffmpegStatic);
+  } catch (error) {
+    console.warn("[MusicService] Failed to configure ffmpeg path for play-dl.", error);
+  }
+}
 
 const INVALID_URL_PLACEHOLDERS = new Set(["undefined", "null", "about:blank", "data:"]);
 
@@ -372,118 +381,104 @@ class MusicService {
   async createStream(track) {
     const url = typeof track?.url === "string" ? track.url.trim() : "";
     if (!url || !isValidHttpUrl(url)) {
-      throw new Error("유효한 트랙 URL이 아닙니다.");
+      throw new Error("Invalid track URL provided.");
     }
 
-    const preferYtDlp = Boolean(track?.forceYtDlp);
+    const disableYtDlp = process.env.MUSIC_DISABLE_YTDLP_STREAM === "true";
+    const disableYtdl = process.env.MUSIC_DISABLE_YTDL_STREAM === "true";
+    const disablePlayDl = process.env.MUSIC_DISABLE_PLAYDL_STREAM === "true";
+
+    const attempts = [];
+
+    if (!disableYtDlp) {
+      attempts.push({
+        label: "yt-dlp",
+        runner: async () => {
+          const result = await createYtDlpAudioStream(url);
+          if (!result?.stream) {
+            throw new Error("yt-dlp did not return a readable stream.");
+          }
+          return {
+            stream: result.stream,
+            type: result.type ?? StreamType.WebmOpus
+          };
+        }
+      });
+    }
+
+    if (!disableYtdl) {
+      attempts.push({
+        label: "@distube/ytdl-core",
+        runner: async () => {
+          if (!ytdlDistube) {
+            ytdlDistube = require("@distube/ytdl-core");
+          }
+
+          const info = await ytdlDistube.getInfo(url);
+          const opus = info.formats
+            .filter(
+              (f) =>
+                f.hasAudio &&
+                !f.hasVideo &&
+                /opus/i.test(f.audioCodec || "") &&
+                /webm/i.test(f.container || "")
+            )
+            .sort((a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0))[0];
+
+          if (!opus) {
+            throw new Error("WebM/Opus format not found (check FFmpeg availability).");
+          }
+
+          const streamReadable = ytdlDistube.downloadFromInfo(info, {
+            format: opus,
+            highWaterMark: 1 << 25
+          });
+
+          return { stream: streamReadable, type: StreamType.WebmOpus };
+        }
+      });
+    }
+
+    if (!disablePlayDl) {
+      attempts.push({
+        label: "play-dl",
+        runner: async () => {
+          const stream = await playdl.stream(url, { discordPlayerCompatibility: true });
+          if (!stream?.stream) {
+            throw new Error("play-dl did not return a readable stream.");
+          }
+          return stream;
+        }
+      });
+    }
+
+    if (attempts.length === 0) {
+      const error = new Error("No audio stream providers are enabled.");
+      error.input = url;
+      throw error;
+    }
+
     let lastError = null;
 
-    const tryPlayDl = async () => {
+    for (const { label, runner } of attempts) {
       try {
-        const kind = playdl.yt_validate(url);
-
-        if (kind === "video") {
-          try {
-            const basic = await playdl.video_basic_info(url);
-            if (basic?.video_details) {
-              const s1 = await playdl.stream_from_info(basic, {
-                discordPlayerCompatibility: true
-              });
-              if (s1?.stream) return s1;
-            }
-            throw new Error("stream_from_info 결과 없음");
-          } catch (e1) {
-            e1.input = url;
-            console.warn("⚠️ play-dl basic_info 경로 실패:", e1?.message ?? e1);
-          }
-
-          try {
-            const info = await playdl.video_info(url);
-            const s2 = await playdl.stream_from_info(info, {
-              discordPlayerCompatibility: true
-            });
-            if (s2?.stream) return s2;
-            throw new Error("stream_from_info 결과 없음(2차)");
-          } catch (e2) {
-            e2.input = url;
-            console.warn("⚠️ play-dl video_info 경로 실패:", e2?.message ?? e2);
-          }
+        const result = await runner();
+        if (result?.stream) {
+          return result;
         }
-
-        const s = await playdl.stream(url, { discordPlayerCompatibility: true });
-        if (!s?.stream) throw new Error("stream(url) 결과 없음");
-        return s;
+        throw new Error(`${label} returned an empty stream result.`);
       } catch (err) {
         err.input = url;
-        throw err;
-      }
-    };
-
-    const tryYtdl = async () => {
-      try {
-        if (!ytdlDistube) ytdlDistube = require("@distube/ytdl-core");
-
-        const info = await ytdlDistube.getInfo(url);
-        const opus = info.formats
-          .filter(
-            (f) =>
-              f.hasAudio &&
-              !f.hasVideo &&
-              /opus/i.test(f.audioCodec || "") &&
-              /webm/i.test(f.container || "")
-          )
-          .sort(
-            (a, b) => (b.audioBitrate || 0) - (a.audioBitrate || 0)
-          )[0];
-
-        if (!opus) {
-          throw new Error("WebM/Opus 포맷을 찾지 못했습니다. (FFmpeg 경로 확인 필요)");
-        }
-
-        const streamReadable = ytdlDistube.downloadFromInfo(info, {
-          format: opus,
-          highWaterMark: 1 << 25
-        });
-
-        return { stream: streamReadable, type: StreamType.WebmOpus };
-      } catch (err) {
-        err.input = url;
-        throw err;
-      }
-    };
-
-    const tryYtDlp = async () => {
-      const result = await createYtDlpAudioStream(url);
-      if (!result?.stream) {
-        throw Object.assign(new Error("yt-dlp 스트림을 생성하지 못했습니다."), { input: url });
-      }
-      return { stream: result.stream, type: result.type };
-    };
-
-    if (!preferYtDlp) {
-      try {
-        return await tryPlayDl();
-      } catch (err) {
         lastError = err;
+        console.warn(`[MusicService] ${label} stream creation failed:`, err?.message ?? err);
       }
-
-      try {
-        return await tryYtdl();
-      } catch (err) {
-        lastError = err;
-      }
-    }
-
-    try {
-      return await tryYtDlp();
-    } catch (err) {
-      lastError = err;
     }
 
     if (lastError) {
       throw lastError;
     }
-    const fallbackError = new Error("음원 스트림을 가져오지 못했습니다.");
+
+    const fallbackError = new Error("Failed to obtain a playable audio stream.");
     fallbackError.input = url;
     throw fallbackError;
   }
