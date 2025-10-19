@@ -1,11 +1,24 @@
-function getMusicService(client) {
+﻿function getMusicService(client) {
   return client.getService("music");
 }
 
 async function ensureMusicService(interaction) {
-  const service = getMusicService(interaction.client);
+  let service = getMusicService(interaction.client);
+
   if (!service) {
-    await interaction.reply({ content: "음악 서비스가 아직 초기화되지 않았습니다. 잠시 후 다시 시도해주세요.", ephemeral: true });
+    try {
+      const services = require('../../services');
+      if (services?.musicService) {
+        interaction.client.registerService?.('music', services.musicService);
+        service = getMusicService(interaction.client);
+      }
+    } catch (_) { }
+  }
+
+  if (!service) {
+    if (!interaction.deferred && !interaction.replied) {
+      await interaction.reply({ content: '음악 서비스가 아직 초기화되지 않았습니다. 잠시 후 다시 시도해주세요.', ephemeral: true });
+    }
     return null;
   }
   return service;
@@ -15,3 +28,4 @@ module.exports = {
   getMusicService,
   ensureMusicService
 };
+
