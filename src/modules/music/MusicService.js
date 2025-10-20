@@ -387,26 +387,69 @@ class MusicService {
     const disableYtDlp = process.env.MUSIC_DISABLE_YTDLP_STREAM === "true";
     const disableYtdl = process.env.MUSIC_DISABLE_YTDL_STREAM === "true";
     const disablePlayDl = process.env.MUSIC_DISABLE_PLAYDL_STREAM === "true";
+    const preferYtDlp = track?.forceYtDlp || process.env.MUSIC_PREFER_YTDLP === "true";
 
     const attempts = [];
 
-    if (!disableYtDlp) {
+    const registerPlayDl = () => {
+      if (disablePlayDl) return;
       attempts.push({
-        label: "yt-dlp",
+        label: "play-dl",
         runner: async () => {
-          const result = await createYtDlpAudioStream(url);
-          if (!result?.stream) {
-            throw new Error("yt-dlp did not return a readable stream.");
-          }
-          return {
-            stream: result.stream,
-            type: result.type ?? StreamType.WebmOpus
+          const kind = playdl.yt_validate(url);
+
+          const streamFromBasicInfo = async () => {
+            const basic = await playdl.video_basic_info(url);
+            if (!basic?.video_details) {
+              throw new Error("video_basic_info returned empty video_details.");
+            }
+            const result = await playdl.stream_from_info(basic, {
+              discordPlayerCompatibility: true
+            });
+            if (!result?.stream) {
+              throw new Error("stream_from_info (basic) returned empty stream.");
+            }
+            return result;
           };
+
+          const streamFromFullInfo = async () => {
+            const info = await playdl.video_info(url);
+            const result = await playdl.stream_from_info(info, {
+              discordPlayerCompatibility: true
+            });
+            if (!result?.stream) {
+              throw new Error("stream_from_info (full) returned empty stream.");
+            }
+            return result;
+          };
+
+          if (kind === "video") {
+            try {
+              return await streamFromBasicInfo();
+            } catch (error) {
+              error.input = url;
+              console.warn("[MusicService] play-dl basic_info path failed:", error?.message ?? error);
+            }
+
+            try {
+              return await streamFromFullInfo();
+            } catch (error) {
+              error.input = url;
+              console.warn("[MusicService] play-dl video_info path failed:", error?.message ?? error);
+            }
+          }
+
+          const fallback = await playdl.stream(url, { discordPlayerCompatibility: true });
+          if (!fallback?.stream) {
+            throw new Error("play-dl stream(url) returned empty stream.");
+          }
+          return fallback;
         }
       });
-    }
+    };
 
-    if (!disableYtdl) {
+    const registerYtdl = () => {
+      if (disableYtdl) return;
       attempts.push({
         label: "@distube/ytdl-core",
         runner: async () => {
@@ -437,19 +480,33 @@ class MusicService {
           return { stream: streamReadable, type: StreamType.WebmOpus };
         }
       });
-    }
+    };
 
-    if (!disablePlayDl) {
+    const registerYtDlp = () => {
+      if (disableYtDlp) return;
       attempts.push({
-        label: "play-dl",
+        label: "yt-dlp",
         runner: async () => {
-          const stream = await playdl.stream(url, { discordPlayerCompatibility: true });
-          if (!stream?.stream) {
-            throw new Error("play-dl did not return a readable stream.");
+          const result = await createYtDlpAudioStream(url);
+          if (!result?.stream) {
+            throw new Error("yt-dlp did not return a readable stream.");
           }
-          return stream;
+          return {
+            stream: result.stream,
+            type: result.type ?? StreamType.WebmOpus
+          };
         }
       });
+    };
+
+    if (preferYtDlp) {
+      registerYtDlp();
+      registerPlayDl();
+      registerYtdl();
+    } else {
+      registerPlayDl();
+      registerYtdl();
+      registerYtDlp();
     }
 
     if (attempts.length === 0) {

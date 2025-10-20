@@ -7,17 +7,22 @@ async function ensureMusicService(interaction) {
 
   if (!service) {
     try {
-      const services = require('../../services');
+      const services = require("../../services");
       if (services?.musicService) {
-        interaction.client.registerService?.('music', services.musicService);
+        interaction.client.registerService?.("music", services.musicService);
         service = getMusicService(interaction.client);
       }
-    } catch (_) { }
+    } catch (_) {
+      // ignore resolution failures and fall back to reply below
+    }
   }
 
   if (!service) {
     if (!interaction.deferred && !interaction.replied) {
-      await interaction.reply({ content: '음악 서비스가 아직 초기화되지 않았습니다. 잠시 후 다시 시도해주세요.', ephemeral: true });
+      await interaction.reply({
+        content: "음악 서비스가 아직 초기화되지 않았습니다. 잠시 후 다시 시도해주세요.",
+        ephemeral: true
+      });
     }
     return null;
   }
@@ -28,4 +33,3 @@ module.exports = {
   getMusicService,
   ensureMusicService
 };
-
