@@ -1,4 +1,4 @@
-﻿const { StreamType } = require("@discordjs/voice");
+const { StreamType } = require("@discordjs/voice");
 const { existsSync } = require("fs");
 const { YOUTUBE_DL_PATH } = require("yt-dlp-exec/src/constants");
 const ytdlp = require("yt-dlp-exec");
@@ -6,7 +6,8 @@ const ytdlp = require("yt-dlp-exec");
 async function ensureBinaryAvailable() {
   const binaryPath = YOUTUBE_DL_PATH;
   if (!binaryPath || !existsSync(binaryPath)) {
-    const error = new Error(`yt-dlp binary is not available at ${binaryPath || "(unknown)"}.`);
+    const hint = binaryPath || "(unknown)";
+    const error = new Error("yt-dlp binary is not available at " + hint + ".");
     error.code = "YTDLP_BINARY_MISSING";
     throw error;
   }

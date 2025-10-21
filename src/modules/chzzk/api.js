@@ -26,17 +26,30 @@ async function request(path, { params } = {}) {
   }
 
   return new Promise((resolve, reject) => {
+    let settled = false;
+    const safeResolve = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const safeReject = (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    };
+
     const req = https.request(url, {
       method: "GET",
       headers: DEFAULT_HEADERS,
       lookup
     }, res => {
       const chunks = [];
+      res.on("error", safeReject);
       res.on("data", chunk => chunks.push(chunk));
       res.on("end", () => {
         const body = Buffer.concat(chunks).toString("utf8");
         if (res.statusCode < 200 || res.statusCode >= 300) {
-          reject(new Error(`Chzzk API 요청 실패 (${res.statusCode})`));
+          safeReject(new Error(`Chzzk API 요청 실패 (${res.statusCode})`));
           return;
         }
 
@@ -44,23 +57,24 @@ async function request(path, { params } = {}) {
         try {
           payload = JSON.parse(body);
         } catch (error) {
-          reject(new Error("Chzzk API 응답 파싱 실패"));
+          safeReject(new Error("Chzzk API 응답 파싱 실패"));
           return;
         }
 
         if (payload.code !== 200) {
           const message = payload.message || "알 수 없는 오류";
-          reject(new Error(`Chzzk API 오류: ${message}`));
+          safeReject(new Error(`Chzzk API 오류: ${message}`));
           return;
         }
 
-        resolve(payload.content);
+        safeResolve(payload.content);
       });
     });
 
-    req.on("error", reject);
+    req.on("error", safeReject);
     req.setTimeout(10_000, () => {
-      req.destroy(new Error("Chzzk API 요청이 시간 초과되었습니다."));
+      safeReject(new Error("Chzzk API 요청이 시간 초과되었습니다."));
+      req.destroy();
     });
     req.end();
   });

@@ -1,9 +1,37 @@
 require("dotenv").config();
 
-const ffmpegPath = require("ffmpeg-static");
+const { existsSync } = require("fs");
+
+function resolveFfmpegBinary() {
+  const candidates = [];
+  const ffmpegStatic = require("ffmpeg-static");
+  if (typeof ffmpegStatic === "string") {
+    candidates.push(ffmpegStatic);
+  }
+
+  try {
+    const { path: installerPath } = require("@ffmpeg-installer/ffmpeg");
+    if (typeof installerPath === "string") {
+      candidates.push(installerPath);
+    }
+  } catch {
+    // optional dependency not installed; ignore
+  }
+
+  for (const candidate of candidates) {
+    if (candidate && existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return null;
+}
+
+const ffmpegPath = resolveFfmpegBinary();
 if (ffmpegPath) {
   process.env.FFMPEG_PATH = ffmpegPath;
   console.log(`[FFmpeg] Using binary: ${ffmpegPath}`);
+} else {
+  console.warn("[FFmpeg] No bundled ffmpeg binary found. Falling back to system PATH lookup.");
 }
 
 const { GatewayIntentBits, Partials } = require("discord.js");

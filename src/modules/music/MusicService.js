@@ -438,12 +438,7 @@ class MusicService {
               console.warn("[MusicService] play-dl video_info path failed:", error?.message ?? error);
             }
           }
-
-          const fallback = await playdl.stream(url, { discordPlayerCompatibility: true });
-          if (!fallback?.stream) {
-            throw new Error("play-dl stream(url) returned empty stream.");
-          }
-          return fallback;
+          throw new Error("play-dl could not produce a compatible stream.");
         }
       });
     };

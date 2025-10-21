@@ -1,4 +1,4 @@
-﻿function getMusicService(client) {
+function getMusicService(client) {
   return client.getService("music");
 }
 
