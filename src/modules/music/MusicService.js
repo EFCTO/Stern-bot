@@ -387,7 +387,9 @@ class MusicService {
     const disableYtDlp = process.env.MUSIC_DISABLE_YTDLP_STREAM === "true";
     const disableYtdl = process.env.MUSIC_DISABLE_YTDL_STREAM === "true";
     const disablePlayDl = process.env.MUSIC_DISABLE_PLAYDL_STREAM === "true";
-    const preferYtDlp = track?.forceYtDlp || process.env.MUSIC_PREFER_YTDLP === "true";
+    const preferYtDlp =
+      track?.forceYtDlp ||
+      process.env.MUSIC_PREFER_YTDLP !== "false";
 
     const attempts = [];
 
