@@ -31,7 +31,6 @@ module.exports = {
           components,
         });
       } catch (error) {
-        // DM이 막혀 있을 수 있으니 조용히 무시
         if (process.env.DEBUG_DM_FAILURE === "true") {
           console.warn("[guildMemberAdd] failed to DM role panel", error);
         }
