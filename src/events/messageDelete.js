@@ -46,6 +46,22 @@ module.exports = {
         }
       }
 
+      // Embeds / Stickers summary
+      if (Array.isArray(fetched.embeds) && fetched.embeds.length) {
+        embed.addFields({ name: "Embeds", value: `${fetched.embeds.length} embed(s)` });
+      }
+      if (fetched.stickers && fetched.stickers.size) {
+        const stickerNames = [...fetched.stickers.values()].map(s => s.name).slice(0, 5).join(", ");
+        embed.addFields({ name: "Stickers", value: stickerNames || `${fetched.stickers.size} sticker(s)` });
+      }
+
+      // If the message was a reply, include reference
+      const ref = fetched.reference;
+      if (ref?.guildId && ref?.channelId && ref?.messageId) {
+        const link = `https://discord.com/channels/${ref.guildId}/${ref.channelId}/${ref.messageId}`;
+        embed.addFields({ name: "Reply To", value: link });
+      }
+
       await sendManagementLog(fetched.client, { embeds: [embed] });
     } catch (error) {
       console.error("[messageDelete] error", error);

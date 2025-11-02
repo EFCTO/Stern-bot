@@ -42,6 +42,17 @@ module.exports = {
       if (newMember.user?.bot) return;
 
       const changes = [];
+
+      // Ensure we have freshest user profile for banner/accentColor comparisons
+      let oldUser = oldMember.user;
+      let newUser = newMember.user;
+      try {
+        // fetch() returns the same User instance updated; capture shallow copies for diff text
+        oldUser = { ...oldUser };
+        newUser = await newMember.user.fetch();
+      } catch {
+        // ignore fetch failures; use cached values
+      }
       if (oldMember.displayName !== newMember.displayName) {
         changes.push({
           name: "닉네임 변경",
@@ -49,24 +60,48 @@ module.exports = {
         });
       }
 
-      if (oldMember.user?.username !== newMember.user?.username) {
+      if (oldUser?.username !== newUser?.username) {
         changes.push({
           name: "사용자명 변경",
-          value: `\`${oldMember.user.username ?? "(없음)"}\` → \`${newMember.user.username ?? "(없음)"}\``,
+          value: `\`${oldUser.username ?? "(없음)"}\` → \`${newUser.username ?? "(없음)"}\``,
         });
       }
 
-      if (oldMember.user?.globalName !== newMember.user?.globalName) {
+      if (oldUser?.globalName !== newUser?.globalName) {
         changes.push({
           name: "프로필 이름 변경",
-          value: `\`${oldMember.user.globalName ?? "(없음)"}\` → \`${newMember.user.globalName ?? "(없음)"}\``,
+          value: `\`${oldUser.globalName ?? "(없음)"}\` → \`${newUser.globalName ?? "(없음)"}\``,
         });
       }
 
-      if (oldMember.user?.avatar !== newMember.user?.avatar) {
+      if (oldUser?.avatar !== newUser?.avatar) {
         changes.push({
           name: "아바타 변경",
-          value: newMember.user.displayAvatarURL?.({ size: 256 }) ?? "(변경된 아바타 URL을 확인할 수 없습니다)",
+          value: [
+            oldUser?.avatar ? `[이전](${newMember.user.client?.users?.resolve(newMember.id)?.displayAvatarURL?.({ size: 256, forceStatic: false }) ?? ""})` : "[이전](없음)",
+            newUser?.displayAvatarURL?.({ size: 256 }) ? `[새로](${newUser.displayAvatarURL({ size: 256 })})` : "[새로](없음)",
+          ].join(" → "),
+        });
+      }
+
+      // Banner / Accent Color
+      const oldBanner = oldUser?.banner ?? null;
+      const newBanner = newUser?.banner ?? null;
+      if (oldBanner !== newBanner) {
+        const oldUrl = typeof newMember.user.bannerURL === "function" && oldBanner ? newMember.user.bannerURL({ size: 512 }) : null;
+        const newUrl = typeof newUser.bannerURL === "function" && newBanner ? newUser.bannerURL({ size: 512 }) : null;
+        changes.push({
+          name: "배너 변경",
+          value: `${oldUrl ? `[이전](${oldUrl})` : "(없음)"} → ${newUrl ? `[새로](${newUrl})` : "(없음)"}`,
+        });
+      }
+
+      const oldAccent = oldUser?.hexAccentColor ?? null;
+      const newAccent = newUser?.hexAccentColor ?? null;
+      if (oldAccent !== newAccent) {
+        changes.push({
+          name: "강조 색상 변경",
+          value: `\`${oldAccent ?? "(없음)"}\` → \`${newAccent ?? "(없음)"}\``,
         });
       }
 
@@ -78,6 +113,15 @@ module.exports = {
       }
       if (removedText) {
         changes.push({ name: "제거된 역할", value: removedText });
+      }
+
+      // Timeout (communication disabled until)
+      const oldTimeout = oldMember.communicationDisabledUntilTimestamp || null;
+      const newTimeout = newMember.communicationDisabledUntilTimestamp || null;
+      if (oldTimeout !== newTimeout) {
+        const oldTxt = oldTimeout ? `<t:${Math.floor(oldTimeout / 1000)}:R>` : "(없음)";
+        const newTxt = newTimeout ? `<t:${Math.floor(newTimeout / 1000)}:R>` : "(없음)";
+        changes.push({ name: "타임아웃 변경", value: `${oldTxt} → ${newTxt}` });
       }
 
       if (!changes.length) {

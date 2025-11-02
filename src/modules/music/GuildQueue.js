@@ -50,9 +50,34 @@ class GuildQueue {
       console.error(`길드 ${guild.id} 오디오 플레이어 오류`, error);
 
       const message = error?.message || "";
-      if (/Status code:\s*403/.test(message) && this.current && !this.current.forceYtDlp) {
-        console.warn("403 응답 감지 – yt-dlp 오디오 스트림으로 재시도합니다.", summarizeTrack(this.current));
-        this.queue.unshift({ ...this.current, forceYtDlp: true });
+      if (/Status code:\s*403/.test(message) && this.current) {
+        const urlKey = typeof this.current.url === "string" ? this.current.url.trim() : "";
+        const previousRetries = urlKey ? this.http403RetryCount.get(urlKey) ?? 0 : 0;
+
+        if (urlKey) {
+          this.http403RetryCount.set(urlKey, previousRetries + 1);
+        }
+
+        if (urlKey && previousRetries < 1) {
+          console.warn(
+            "403 응답 감지 – yt-dlp 오디오 스트림으로 재시도합니다.",
+            summarizeTrack(this.current)
+          );
+          this.service.markTrack403(urlKey);
+          this.queue.unshift({
+            ...this.current,
+            forceYtDlp: true,
+            disableYtdl: true
+          });
+        } else {
+          console.warn(
+            "403 응답이 반복되어 트랙을 건너뜁니다.",
+            summarizeTrack(this.current)
+          );
+          if (urlKey) {
+            this.service.markTrack403(urlKey);
+          }
+        }
       }
 
       this.current = null;
@@ -69,6 +94,7 @@ class GuildQueue {
     this.volume = 0.5;
     this.textChannelId = null;
     this.leaveTimeout = null;
+    this.http403RetryCount = new Map();
   }
 
   get tracks() {

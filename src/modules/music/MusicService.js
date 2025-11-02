@@ -4,9 +4,27 @@ let ytdlDistube; // 吏??濡쒕뱶
 
 const playdl = require("play-dl");
 const ffmpegStatic = require("ffmpeg-static");
+const { readFileSync, existsSync } = require("fs");
 const GuildQueue = require("./GuildQueue");
 const Track = require("./Track");
 const { createYtDlpAudioStream } = require("./ytDlpStream");
+
+const YT_DLP_HTTP_403_COOLDOWN_MS = 10 * 60 * 1000; // 10 minutes
+const DEFAULT_YT_UA = process.env.MUSIC_YT_UA ||
+  "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0 Safari/537.36";
+
+function loadYoutubeCookieHeader() {
+  const inline = (process.env.MUSIC_YT_COOKIE_HEADER || "").trim();
+  if (inline) return inline;
+  const file = (process.env.MUSIC_YT_COOKIE_HEADER_FILE || "").trim();
+  if (file && existsSync(file)) {
+    try {
+      const v = readFileSync(file, "utf8").trim();
+      if (v) return v;
+    } catch (_) {}
+  }
+  return null;
+}
 
 if (ffmpegStatic && typeof playdl.setFfmpegPath === "function") {
   try {
@@ -301,6 +319,18 @@ function createTrackFromVideo(video, requestedBy, { fallbackUrl = null, fallback
 class MusicService {
   constructor() {
     this.queues = new Map();
+    this.ytDlpCooldownUntil = 0;
+    this.forceYtDlpUrls = new Set();
+    this.disableYtdlUrls = new Set();
+    this.youtubeCookieHeader = loadYoutubeCookieHeader();
+
+    if (this.youtubeCookieHeader && typeof playdl.setToken === "function") {
+      try {
+        playdl.setToken({ youtube: { cookie: this.youtubeCookieHeader } });
+      } catch (err) {
+        console.warn("[MusicService] Failed to set play-dl cookie token:", err?.message ?? err);
+      }
+    }
   }
 
   getQueue(guild) {
@@ -384,12 +414,26 @@ class MusicService {
       throw new Error("Invalid track URL provided.");
     }
 
-    const disableYtDlp = process.env.MUSIC_DISABLE_YTDLP_STREAM === "true";
-    const disableYtdl = process.env.MUSIC_DISABLE_YTDL_STREAM === "true";
-    const disablePlayDl = process.env.MUSIC_DISABLE_PLAYDL_STREAM === "true";
+    const normalizedUrl = url;
+    const forceYtDlpByService = this.forceYtDlpUrls.has(normalizedUrl);
+    const disableYtdlByService = this.disableYtdlUrls.has(normalizedUrl);
+
+    const disableYtDlpExplicit =
+      track?.disableYtDlp === true || process.env.MUSIC_DISABLE_YTDLP_STREAM === "true";
+    const disableYtDlpCooldown =
+      Number.isFinite(this.ytDlpCooldownUntil) && Date.now() < this.ytDlpCooldownUntil;
+    const disableYtDlp = disableYtDlpExplicit || (track?.forceYtDlp ? false : disableYtDlpCooldown);
+    const disableYtdl =
+      track?.disableYtdl === true ||
+      disableYtdlByService ||
+      process.env.MUSIC_DISABLE_YTDL_STREAM === "true";
+    const disablePlayDl =
+      track?.disablePlayDl === true || process.env.MUSIC_DISABLE_PLAYDL_STREAM === "true";
+    const envPrefer = process.env.MUSIC_PREFER_YTDLP;
     const preferYtDlp =
-      track?.forceYtDlp ||
-      process.env.MUSIC_PREFER_YTDLP !== "false";
+      Boolean(track?.forceYtDlp) ||
+      forceYtDlpByService ||
+      (envPrefer ? envPrefer === "true" : true);
 
     const attempts = [];
 
@@ -446,7 +490,7 @@ class MusicService {
     };
 
     const registerYtdl = () => {
-      if (disableYtdl) return;
+      if (disableYtdl || track?.forceYtDlp) return;
       attempts.push({
         label: "@distube/ytdl-core",
         runner: async () => {
@@ -454,7 +498,11 @@ class MusicService {
             ytdlDistube = require("@distube/ytdl-core");
           }
 
-          const info = await ytdlDistube.getInfo(url);
+          const requestOptions = this.youtubeCookieHeader
+            ? { headers: { cookie: this.youtubeCookieHeader, "user-agent": DEFAULT_YT_UA } }
+            : undefined;
+
+          const info = await ytdlDistube.getInfo(url, requestOptions ? { requestOptions } : undefined);
           const opus = info.formats
             .filter(
               (f) =>
@@ -469,10 +517,16 @@ class MusicService {
             throw new Error("WebM/Opus format not found (check FFmpeg availability).");
           }
 
-          const streamReadable = ytdlDistube.downloadFromInfo(info, {
-            format: opus,
-            highWaterMark: 1 << 25
-          });
+          const streamReadable = ytdlDistube.downloadFromInfo(
+            info,
+            Object.assign(
+              {
+                format: opus,
+                highWaterMark: 1 << 25
+              },
+              requestOptions ? { requestOptions } : {}
+            )
+          );
 
           return { stream: streamReadable, type: StreamType.WebmOpus };
         }
@@ -487,6 +541,21 @@ class MusicService {
           const result = await createYtDlpAudioStream(url);
           if (!result?.stream) {
             throw new Error("yt-dlp did not return a readable stream.");
+          }
+          return {
+            stream: result.stream,
+            type: result.type ?? StreamType.WebmOpus
+          };
+        }
+      });
+      // Fallback: transcode to Opus via ffmpeg if direct Opus is unavailable
+      attempts.push({
+        label: "yt-dlp-transcode",
+        runner: async () => {
+          const { createYtDlpOpusTranscodeStream } = require("./ytDlpStream");
+          const result = await createYtDlpOpusTranscodeStream(url);
+          if (!result?.stream) {
+            throw new Error("yt-dlp transcode did not return a readable stream.");
           }
           return {
             stream: result.stream,
@@ -525,6 +594,21 @@ class MusicService {
         err.input = url;
         lastError = err;
         console.warn(`[MusicService] ${label} stream creation failed:`, err?.message ?? err);
+        if (label === "yt-dlp" && err?.httpStatus === 403) {
+          const now = Date.now();
+          const cooldownActive =
+            Number.isFinite(this.ytDlpCooldownUntil) && now < this.ytDlpCooldownUntil;
+          const nextAllowed = now + YT_DLP_HTTP_403_COOLDOWN_MS;
+          if (!cooldownActive) {
+            console.warn(
+              `[MusicService] yt-dlp disabled for ${Math.round(
+                YT_DLP_HTTP_403_COOLDOWN_MS / 60000
+              )} minutes after receiving HTTP 403.`
+            );
+          }
+          const currentUntil = Number.isFinite(this.ytDlpCooldownUntil) ? this.ytDlpCooldownUntil : 0;
+          this.ytDlpCooldownUntil = Math.max(currentUntil, nextAllowed);
+        }
       }
     }
 
@@ -535,6 +619,14 @@ class MusicService {
     const fallbackError = new Error("Failed to obtain a playable audio stream.");
     fallbackError.input = url;
     throw fallbackError;
+  }
+
+  markTrack403(url) {
+    if (typeof url !== "string") return;
+    const trimmed = url.trim();
+    if (!trimmed) return;
+    this.forceYtDlpUrls.add(trimmed);
+    this.disableYtdlUrls.add(trimmed);
   }
 
 }

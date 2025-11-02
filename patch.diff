@@ -1,0 +1,48 @@
+*** Begin Patch
+*** Update File: src/modules/music/ytDlpStream.js
+@@
+-  let child;
++  let child;
++  const cookieHeader = (process.env.MUSIC_YT_COOKIE_HEADER || "").trim() ||
++    (process.env.MUSIC_YT_COOKIE_HEADER_FILE && (require('fs').existsSync(process.env.MUSIC_YT_COOKIE_HEADER_FILE)
++      ? require('fs').readFileSync(process.env.MUSIC_YT_COOKIE_HEADER_FILE, 'utf8').trim()
++      : "")) || "";
++  const ytdlpCookiesFile = (process.env.MUSIC_YTDLP_COOKIES_FILE || "").trim();
++  const ytdlpCookiesFromBrowser = (process.env.MUSIC_YTDLP_COOKIES_FROM_BROWSER || "").trim();
++  const defaultUA = process.env.MUSIC_YT_UA ||
++    "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0 Safari/537.36";
+   try {
+-    child = ytdlp.exec(url, {
++    const ytdlpArgs = {
+       o: "-",
+       f: "bestaudio[acodec=opus]/bestaudio",
+       q: true,
+       n: true,
+       "no-warnings": true,
+-      "no-check-certificates": true
+-    }, {
++      "no-check-certificates": true
++    };
++
++    const addHeaders = [];
++    if (cookieHeader) {
++      addHeaders.push(Cookie: );
++    }
++    if (defaultUA) {
++      addHeaders.push(User-Agent: );
++    }
++    if (addHeaders.length > 0) {
++      ytdlpArgs["add-header"] = addHeaders;
++    }
++    if (ytdlpCookiesFile) {
++      ytdlpArgs.cookies = ytdlpCookiesFile;
++    }
++    if (ytdlpCookiesFromBrowser) {
++      ytdlpArgs["cookies-from-browser"] = ytdlpCookiesFromBrowser;
++    }
++
++    child = ytdlp.exec(url, ytdlpArgs, {
+       stdio: ["ignore", "pipe", "pipe"],
+       windowsHide: true
+     });
+*** End Patch
