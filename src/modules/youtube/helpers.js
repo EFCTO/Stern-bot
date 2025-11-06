@@ -20,8 +20,21 @@ async function ensureYoutubeService(target) {
     const previous = svc ?? null;
     svc = new YoutubeService(client);
 
-    if (previous?.state && typeof previous.state === "object") {
-      svc.state = { ...svc.state, ...previous.state };
+    // Migrate any previous in-memory state
+    if (Array.isArray(previous?.channels)) {
+      svc.channels = previous.channels.map(c => ({ ...c }));
+    } else if (previous?.state && typeof previous.state === "object") {
+      // backward-compat: single state -> channels[0]
+      const s = previous.state;
+      if (s.channelId) {
+        svc.channels = [{
+          channelId: s.channelId,
+          channelTitle: s.channelTitle ?? null,
+          notifyChannelId: s.notifyChannelId ?? null,
+          lastVideoId: s.lastVideoId ?? null,
+          lastAnnouncedAt: s.lastAnnouncedAt ?? null,
+        }];
+      }
     }
 
     if (typeof previous?.stop === "function") {

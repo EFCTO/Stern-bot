@@ -4,7 +4,7 @@ const path = require("path");
 class ChzzkRepository {
   constructor(filePath) {
     this.filePath = filePath;
-    this.data = { broadcaster: null };
+    this.data = { broadcasters: [] };
   }
 
   async load() {
@@ -12,7 +12,14 @@ class ChzzkRepository {
       const raw = await fs.promises.readFile(this.filePath, "utf8");
       const parsed = JSON.parse(raw);
       if (parsed && typeof parsed === "object") {
-        this.data.broadcaster = parsed.broadcaster ?? null;
+        if (Array.isArray(parsed.broadcasters)) {
+          this.data.broadcasters = parsed.broadcasters.map(b => ({ ...b }));
+        } else if (parsed.broadcaster && typeof parsed.broadcaster === "object") {
+          // backward-compat: migrate single broadcaster to array
+          this.data.broadcasters = [{ ...parsed.broadcaster }];
+        } else {
+          this.data.broadcasters = [];
+        }
       }
     } catch (error) {
       if (error.code !== "ENOENT") {
@@ -23,19 +30,40 @@ class ChzzkRepository {
     }
   }
 
-  async setBroadcaster(broadcaster) {
-    this.data.broadcaster = broadcaster ? { ...broadcaster } : null;
+  getBroadcasters() {
+    return this.data.broadcasters.map(b => ({ ...b }));
+  }
+
+  async setBroadcasters(list) {
+    this.data.broadcasters = Array.isArray(list) ? list.map(b => ({ ...b })) : [];
     await this.#write();
   }
 
-  getBroadcaster() {
-    const broadcaster = this.data.broadcaster;
-    return broadcaster ? { ...broadcaster } : null;
+  async upsertBroadcaster(broadcaster) {
+    if (!broadcaster || !broadcaster.channelId) return;
+    const i = this.data.broadcasters.findIndex(b => b.channelId === broadcaster.channelId);
+    if (i >= 0) {
+      this.data.broadcasters[i] = { ...this.data.broadcasters[i], ...broadcaster };
+    } else {
+      this.data.broadcasters.push({ ...broadcaster });
+    }
+    await this.#write();
+  }
+
+  async removeBroadcaster(channelIdOrName) {
+    const before = this.data.broadcasters.length;
+    const key = String(channelIdOrName || "").toLowerCase();
+    this.data.broadcasters = this.data.broadcasters.filter(
+      b => !(b.channelId === channelIdOrName || String(b.channelName || "").toLowerCase() === key)
+    );
+    const changed = this.data.broadcasters.length !== before;
+    if (changed) await this.#write();
+    return changed;
   }
 
   async #write() {
     await this.#ensureDirectory();
-    const payload = JSON.stringify(this.data, null, 2);
+    const payload = JSON.stringify({ broadcasters: this.data.broadcasters }, null, 2);
     await fs.promises.writeFile(this.filePath, payload, "utf8");
   }
 
@@ -46,3 +74,4 @@ class ChzzkRepository {
 }
 
 module.exports = ChzzkRepository;
+

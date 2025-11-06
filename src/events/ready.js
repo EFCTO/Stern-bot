@@ -20,8 +20,9 @@ module.exports = {
 
     try {
       const youtubeService = await ensureYoutubeService(client);
-      if (youtubeService?.state?.channelId) {
-        console.log(`[YouTube] Monitoring channel ${youtubeService.state.channelId}`);
+      const list = typeof youtubeService?.getChannels === "function" ? youtubeService.getChannels() : [];
+      if (Array.isArray(list) && list.length > 0) {
+        console.log(`[YouTube] Monitoring ${list.length} channel(s)`);
       }
     } catch (error) {
       console.error("[YouTube] Failed to initialize", error);

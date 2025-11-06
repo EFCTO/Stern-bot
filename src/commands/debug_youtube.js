@@ -1,4 +1,4 @@
-﻿const { SlashCommandBuilder, PermissionFlagsBits, AttachmentBuilder, EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require("discord.js");
 const { ensureYoutubeService } = require("../modules/youtube/helpers");
 const { prepareDebugThumbnail, DEBUG_IMAGE_PATH } = require("../utils/debugThumbnail");
 
@@ -36,8 +36,9 @@ module.exports = {
       console.error("[YouTube Debug] thumbnail preparation failed", error);
     }
 
-    const mentionContent = `[YouTube] <@&${ALERT_ROLE_ID}> 위드고 님의 새 영상이 업로드되었어요! (디버그)`;
-    const channelTitle = service.state?.channelTitle || "Channel";
+    const mentionContent = `[YouTube] <@&${ALERT_ROLE_ID}> 테스트용 알림 미리보기입니다! (디버그)`;
+    const firstConfigured = typeof service.getChannels === "function" ? (service.getChannels()[0] ?? null) : null;
+    const channelTitle = firstConfigured?.channelTitle || "Channel";
     const debugVideoId = `debug-${Date.now()}`;
 
     try {
@@ -77,15 +78,16 @@ module.exports = {
       }
     } catch (error) {
       console.error("[YouTube Debug] notification failed", error);
-      await interaction.editReply("디버그 알림을 보내는 중 오류가 발생했어요. 콘솔 로그를 확인해 주세요.");
+      await interaction.editReply("테스트 알림을 전송하는 중 오류가 발생했어요. 자세한 로그를 확인해 주세요.");
       return;
     }
 
-    const footerLines = ["디버그 유튜브 알림을 보냈어요."];
+    const footerLines = ["유튜브 알림 미리보기 완료."];
     if (!attachment) {
-      footerLines.push(`참고: ${DEBUG_IMAGE_PATH} 파일을 찾을 수 없어 기본 썸네일을 사용하지 못했어요.`);
+      footerLines.push(`참고: ${DEBUG_IMAGE_PATH} 에서 이미지를 찾지 못해 기본 이미지를 사용했어요.`);
     }
 
     await interaction.editReply(footerLines.join("\n"));
   },
 };
+

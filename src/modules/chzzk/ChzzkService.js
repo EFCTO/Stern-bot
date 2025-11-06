@@ -7,7 +7,7 @@ class ChzzkService {
   constructor(repository, { pollInterval = 60_000 } = {}) {
     this.repository = repository;
     this.pollInterval = pollInterval;
-    this.broadcaster = null;
+    this.broadcasters = [];
     this.timer = null;
     this.client = null;
     this._checking = false;
@@ -15,7 +15,7 @@ class ChzzkService {
 
   async initialize() {
     await this.repository.load();
-    this.broadcaster = this.repository.getBroadcaster();
+    this.broadcasters = this.repository.getBroadcasters();
   }
 
   async start(client) {
@@ -39,12 +39,12 @@ class ChzzkService {
     this.client = null;
   }
 
-  getBroadcaster() {
-    return this.broadcaster ? { ...this.broadcaster } : null;
+  getBroadcasters() {
+    return Array.isArray(this.broadcasters) ? this.broadcasters.map(b => ({ ...b })) : [];
   }
 
   async registerBroadcaster({ channelId, channelName, notifyChannelId, profileImageUrl = null, isLive = false }) {
-    this.broadcaster = {
+    const entry = {
       channelId,
       channelName,
       notifyChannelId,
@@ -52,13 +52,30 @@ class ChzzkService {
       isLive: Boolean(isLive),
       lastAnnouncedAt: null,
     };
-    await this.repository.setBroadcaster(this.broadcaster);
+    const idx = this.broadcasters.findIndex(b => b.channelId === channelId);
+    if (idx >= 0) {
+      this.broadcasters[idx] = { ...this.broadcasters[idx], ...entry };
+    } else {
+      this.broadcasters.push(entry);
+    }
+    await this.repository.upsertBroadcaster(entry);
     await this.#runCheck();
   }
 
-  async clearBroadcaster() {
-    this.broadcaster = null;
-    await this.repository.setBroadcaster(null);
+  async clearBroadcasters() {
+    this.broadcasters = [];
+    await this.repository.setBroadcasters([]);
+  }
+
+  async removeBroadcaster(channelIdOrName) {
+    const before = this.broadcasters.length;
+    const key = String(channelIdOrName || "").toLowerCase();
+    this.broadcasters = this.broadcasters.filter(
+      b => !(b.channelId === channelIdOrName || String(b.channelName || "").toLowerCase() === key)
+    );
+    const removed = this.broadcasters.length !== before;
+    if (removed) await this.repository.removeBroadcaster(channelIdOrName);
+    return removed;
   }
 
   async #runCheck() {
@@ -74,41 +91,41 @@ class ChzzkService {
   }
 
   async #checkAndAnnounce() {
-    if (!this.broadcaster) return;
+    if (!Array.isArray(this.broadcasters) || this.broadcasters.length === 0) return;
 
-    const channelInfo = await getChannel(this.broadcaster.channelId).catch(error => {
-      console.error("[Chzzk] channel lookup failed", error);
-      return null;
-    });
+    for (let i = 0; i < this.broadcasters.length; i++) {
+      const b = this.broadcasters[i];
+      if (!b || !b.channelId) continue;
 
-    if (!channelInfo) return;
+      const channelInfo = await getChannel(b.channelId).catch(error => {
+        console.error("[Chzzk] channel lookup failed", error);
+        return null;
+      });
+      if (!channelInfo) continue;
 
-    const isLive = Boolean(channelInfo.openLive);
-    const wasLive = Boolean(this.broadcaster.isLive);
+      const isLive = Boolean(channelInfo.openLive);
+      const wasLive = Boolean(b.isLive);
 
-    if (isLive && !wasLive) {
-      await this.#announceLive(channelInfo);
-      this.broadcaster.lastAnnouncedAt = new Date().toISOString();
-    }
+      if (isLive && !wasLive) {
+        await this.#announceLive(channelInfo, { broadcaster: b });
+        b.lastAnnouncedAt = new Date().toISOString();
+      }
 
-    if (wasLive !== isLive) {
-      this.broadcaster.isLive = isLive;
-      await this.repository.setBroadcaster(this.broadcaster);
+      if (wasLive !== isLive) {
+        b.isLive = isLive;
+        await this.repository.upsertBroadcaster(b);
+      } else if (isLive && !wasLive) {
+        await this.repository.upsertBroadcaster(b);
+      }
     }
   }
 
   async #announceLive(channelInfo, options = {}) {
     if (!this.client) return;
 
-    const {
-      overrideChannel = null,
-      broadcaster: broadcasterOverride = null,
-      thumbnailAttachment = null,
-      content,
-      allowedMentions,
-    } = options;
+    const { overrideChannel = null, broadcaster: broadcasterOverride = null, thumbnailAttachment = null, content, allowedMentions } = options;
 
-    const broadcaster = broadcasterOverride ?? this.broadcaster;
+    const broadcaster = broadcasterOverride ?? this.broadcasters[0] ?? null;
     if (!broadcaster) return;
 
     let channel = overrideChannel;
@@ -131,9 +148,9 @@ class ChzzkService {
 
     const embed = new EmbedBuilder()
       .setColor(0x03c75a)
-      .setTitle(liveInfo?.liveTitle || `${broadcaster.channelName} 님의 라이브 스트림`)
+      .setTitle(liveInfo?.liveTitle || `${broadcaster.channelName} 의 라이브 방송`)
       .setURL(liveUrl)
-      .setDescription(`**${broadcaster.channelName}** 님이 방송을 시작했어요!`)
+      .setDescription(`**${broadcaster.channelName}** 방송이 시작됐어요!`)
       .setTimestamp(liveInfo?.openDate ? new Date(liveInfo.openDate) : new Date());
 
     if (broadcaster.profileImageUrl) {
@@ -167,7 +184,7 @@ class ChzzkService {
 
     await channel
       .send({
-        content: content ?? `[LIVE] <@&${ALERT_ROLE_ID}> **${broadcaster.channelName}**님의 라이브가 시작됐어요!\n${liveUrl}`,
+        content: content ?? `[LIVE] <@&${ALERT_ROLE_ID}> **${broadcaster.channelName}** 라이브가 시작됐어요!\n${liveUrl}`,
         embeds: [embed],
         allowedMentions: allowedMentions ?? { roles: [ALERT_ROLE_ID], users: [] },
         files: files.length ? files : undefined,
@@ -177,25 +194,20 @@ class ChzzkService {
       });
   }
 
-  async sendDebugNotification(targetChannel, {
-    attachment = null,
-    title,
-    category,
-    viewCount,
-    mentionContent,
-    allowedMentions,
-  } = {}) {
+  async sendDebugNotification(targetChannel, { attachment = null, title, category, viewCount, mentionContent, allowedMentions } = {}) {
     if (!targetChannel || typeof targetChannel.isTextBased !== "function" || !targetChannel.isTextBased()) {
       throw new Error("Debug notification channel must be text-based.");
     }
 
     const now = new Date();
-    const broadcaster = this.broadcaster ?? {
-      channelId: "debug-channel",
-      channelName: "Debug Broadcaster",
-      notifyChannelId: targetChannel.id,
-      profileImageUrl: null,
-    };
+    const broadcaster = (Array.isArray(this.broadcasters) && this.broadcasters[0])
+      ? this.broadcasters[0]
+      : {
+          channelId: "debug-channel",
+          channelName: "Debug Broadcaster",
+          notifyChannelId: targetChannel.id,
+          profileImageUrl: null,
+        };
 
     const channelInfo = {
       openLive: {
@@ -212,7 +224,7 @@ class ChzzkService {
       overrideChannel: targetChannel,
       broadcaster,
       thumbnailAttachment: attachment,
-      content: mentionContent ?? `[LIVE] <@&${ALERT_ROLE_ID}> 디버그 라이브 방송이 시작됐어요!\nhttps://chzzk.naver.com/live/${broadcaster.channelId}`,
+      content: mentionContent ?? `[LIVE] <@&${ALERT_ROLE_ID}> 디버그 라이브 알림입니다!\nhttps://chzzk.naver.com/live/${broadcaster.channelId}`,
       allowedMentions: allowedMentions ?? { parse: [] },
     });
   }
@@ -221,3 +233,4 @@ class ChzzkService {
 ChzzkService.ALERT_ROLE_ID = ALERT_ROLE_ID;
 
 module.exports = ChzzkService;
+

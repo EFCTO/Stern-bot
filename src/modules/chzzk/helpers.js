@@ -14,7 +14,12 @@ async function ensureChzzkService(interaction) {
     const repository = service.repository ?? null;
     if (repository) {
       const replacement = new ChzzkService(repository, { pollInterval: service.pollInterval });
-      replacement.broadcaster = service.broadcaster ? { ...service.broadcaster } : null;
+      // Carry over any previously loaded broadcasters if present
+      if (Array.isArray(service.broadcasters)) {
+        replacement.broadcasters = service.broadcasters.map(b => ({ ...b }));
+      } else if (service.broadcaster) {
+        replacement.broadcasters = [ { ...service.broadcaster } ];
+      }
       if (typeof service.shutdown === "function") {
         await service.shutdown().catch(() => {});
       }

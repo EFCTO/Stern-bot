@@ -1,4 +1,4 @@
-﻿const { SlashCommandBuilder, PermissionFlagsBits, AttachmentBuilder, EmbedBuilder } = require("discord.js");
+const { SlashCommandBuilder, AttachmentBuilder, EmbedBuilder } = require("discord.js");
 const { ensureChzzkService } = require("../modules/chzzk/helpers");
 const { prepareDebugThumbnail, DEBUG_IMAGE_PATH } = require("../utils/debugThumbnail");
 
@@ -36,7 +36,7 @@ module.exports = {
       console.error("[Chzzk Debug] thumbnail preparation failed", error);
     }
 
-    const mentionContent = `[LIVE] <@&${ALERT_ROLE_ID}> 위드고 님의 방송이 시작되었어요! (디버그)`;
+    const mentionContent = `[LIVE] <@&${ALERT_ROLE_ID}> 테스트용 라이브 알림입니다! (디버그)`;
     const broadcasterName = service.getBroadcaster?.()?.channelName || "Debug Broadcaster";
 
     try {
@@ -71,15 +71,16 @@ module.exports = {
       }
     } catch (error) {
       console.error("[Chzzk Debug] notification failed", error);
-      await interaction.editReply("디버그 알림을 보내는 중 오류가 발생했어요. 콘솔 로그를 확인해 주세요.");
+      await interaction.editReply("테스트 알림을 전송하는 중 오류가 발생했어요. 자세한 로그를 확인해 주세요.");
       return;
     }
 
-    const footerLines = ["디버그 치지직 알림을 보냈어요."];
+    const footerLines = ["치지직 알림 미리보기 완료."];
     if (!attachment) {
-      footerLines.push(`참고: ${DEBUG_IMAGE_PATH} 파일을 찾을 수 없어 기본 이미지를 사용하지 못했어요.`);
+      footerLines.push(`참고: ${DEBUG_IMAGE_PATH} 에서 이미지를 찾지 못해 기본 이미지를 사용했어요.`);
     }
 
     await interaction.editReply(footerLines.join("\n"));
   },
 };
+

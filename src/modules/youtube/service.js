@@ -1,4 +1,4 @@
-﻿const fs = require("node:fs");
+const fs = require("node:fs");
 const path = require("node:path");
 const { EmbedBuilder } = require("discord.js");
 const { fetchLatestVideo, getChannelTitle } = require("./api");
@@ -20,18 +20,23 @@ function writeJSONSafe(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2), "utf8");
 }
 
+function loadChannelsFromSaved(saved) {
+  if (!saved || typeof saved !== "object") return [];
+  if (Array.isArray(saved.channels)) {
+    return saved.channels.map(c => ({ ...c }));
+  }
+  if (saved.channelId) {
+    const { channelId, channelTitle = null, notifyChannelId = null, lastVideoId = null, lastAnnouncedAt = null } = saved;
+    return [{ channelId, channelTitle, notifyChannelId, lastVideoId, lastAnnouncedAt }];
+  }
+  return [];
+}
+
 class YoutubeService {
   constructor(client) {
     this.client = client;
     const saved = readJSONSafe(SAVE_PATH, null) ?? {};
-    this.state = {
-      channelId: null,
-      channelTitle: null,
-      notifyChannelId: null,
-      lastVideoId: null,
-      lastAnnouncedAt: null,
-      ...saved,
-    };
+    this.channels = loadChannelsFromSaved(saved);
     this.timer = null;
   }
 
@@ -50,69 +55,78 @@ class YoutubeService {
     }
   }
 
-  getChannel() {
-    const { channelId } = this.state;
-    if (!channelId) return null;
-    return { ...this.state };
+  getChannels() {
+    return Array.isArray(this.channels) ? this.channels.map(c => ({ ...c })) : [];
   }
 
   async registerChannel({ channelId, notifyChannelId }) {
     const title = await getChannelTitle(channelId).catch(() => "YouTube Channel");
-    this.state.channelId = channelId;
-    this.state.channelTitle = title;
-    this.state.notifyChannelId = notifyChannelId;
-
     const latest = await fetchLatestVideo(channelId).catch(() => null);
-    if (latest?.videoId) {
-      this.state.lastVideoId = latest.videoId;
+
+    const entry = {
+      channelId,
+      channelTitle: title,
+      notifyChannelId,
+      lastVideoId: latest?.videoId || null,
+      lastAnnouncedAt: latest?.videoId ? new Date().toISOString() : null,
+    };
+
+    const idx = this.channels.findIndex(c => c.channelId === channelId);
+    if (idx >= 0) {
+      this.channels[idx] = { ...this.channels[idx], ...entry };
+    } else {
+      this.channels.push(entry);
     }
-    writeJSONSafe(SAVE_PATH, this.state);
+    writeJSONSafe(SAVE_PATH, { channels: this.channels });
   }
 
-  async clearChannel() {
-    this.state = {
-      channelId: null,
-      channelTitle: null,
-      notifyChannelId: null,
-      lastVideoId: null,
-      lastAnnouncedAt: null,
-    };
-    writeJSONSafe(SAVE_PATH, this.state);
+  async clearChannels() {
+    this.channels = [];
+    writeJSONSafe(SAVE_PATH, { channels: this.channels });
+  }
+
+  async removeChannel(channelIdOrTitle) {
+    const before = this.channels.length;
+    const key = String(channelIdOrTitle || "").toLowerCase();
+    this.channels = this.channels.filter(
+      c => !(c.channelId === channelIdOrTitle || String(c.channelTitle || "").toLowerCase() === key)
+    );
+    const changed = this.channels.length !== before;
+    if (changed) writeJSONSafe(SAVE_PATH, { channels: this.channels });
+    return changed;
   }
 
   async _tick() {
-    const { channelId, notifyChannelId, lastVideoId } = this.state;
-    if (!channelId || !notifyChannelId) return;
+    if (!Array.isArray(this.channels) || this.channels.length === 0) return;
 
-    const latest = await fetchLatestVideo(channelId).catch(err => {
-      console.error("[YouTube] fetchLatestVideo failed", err);
-      return null;
-    });
-    if (!latest?.videoId) return;
+    for (let i = 0; i < this.channels.length; i++) {
+      const entry = this.channels[i];
+      if (!entry || !entry.channelId || !entry.notifyChannelId) continue;
 
-    if (!lastVideoId) {
-      this.state.lastVideoId = latest.videoId;
-      this.state.lastAnnouncedAt = new Date().toISOString();
-      writeJSONSafe(SAVE_PATH, this.state);
-      return;
+      const latest = await fetchLatestVideo(entry.channelId).catch(err => {
+        console.error("[YouTube] fetchLatestVideo failed", err);
+        return null;
+      });
+      if (!latest?.videoId) continue;
+
+      if (!entry.lastVideoId) {
+        entry.lastVideoId = latest.videoId;
+        entry.lastAnnouncedAt = new Date().toISOString();
+        writeJSONSafe(SAVE_PATH, { channels: this.channels });
+        continue;
+      }
+
+      if (latest.videoId === entry.lastVideoId) continue;
+
+      const channel = await this.client.channels.fetch(entry.notifyChannelId).catch(() => null);
+      if (!channel || !channel.isTextBased()) continue;
+
+      await this.#announce(channel, entry, latest);
     }
-
-    if (latest.videoId === lastVideoId) return;
-
-    const channel = await this.client.channels.fetch(notifyChannelId).catch(() => null);
-    if (!channel || !channel.isTextBased()) return;
-
-    await this.#announce(channel, latest);
   }
 
-  async #announce(targetChannel, latest, options = {}) {
-    const {
-      thumbnailAttachment = null,
-      files: extraFiles = [],
-      content,
-      allowedMentions,
-      skipStateUpdate = false,
-    } = options;
+  async #announce(targetChannel, entry, latest, options = {}) {
+    const { thumbnailAttachment = null, files: extraFiles = [], content, allowedMentions, skipStateUpdate = false } = options;
 
     const url = `https://youtu.be/${latest.videoId}`;
     const publishDate = latest.publishedAt ? new Date(latest.publishedAt) : new Date();
@@ -122,10 +136,10 @@ class YoutubeService {
       .setTitle(latest.title || "New Video")
       .setURL(url)
       .setAuthor({
-        name: this.state.channelTitle || "YouTube",
+        name: entry.channelTitle || "YouTube",
         iconURL: "https://www.google.com/s2/favicons?domain=youtube.com&sz=64",
       })
-      .setDescription(`**${this.state.channelTitle || "Channel"}** just uploaded a new video!`)
+      .setDescription(`**${entry.channelTitle || "Channel"}** just uploaded a new video!`)
       .setThumbnail(`https://i.ytimg.com/vi/${latest.videoId}/hqdefault.jpg`)
       .setTimestamp(!Number.isNaN(publishDate.getTime()) ? publishDate : new Date());
 
@@ -138,7 +152,7 @@ class YoutubeService {
 
     await targetChannel
       .send({
-        content: content ?? `[YouTube] <@&${ALERT_ROLE_ID}> **${this.state.channelTitle || "Channel"}** 님의 영상이 올라왔습니다!\n${url}`,
+        content: content ?? `[YouTube] <@&${ALERT_ROLE_ID}> **${entry.channelTitle || "Channel"}** 새 영상이 올라왔습니다!\n${url}`,
         embeds: [embed],
         allowedMentions: allowedMentions ?? { roles: [ALERT_ROLE_ID], users: [] },
         files: files.length ? files : undefined,
@@ -148,20 +162,16 @@ class YoutubeService {
       });
 
     if (!skipStateUpdate) {
-      this.state.lastVideoId = latest.videoId;
-      this.state.lastAnnouncedAt = new Date().toISOString();
-      writeJSONSafe(SAVE_PATH, this.state);
+      entry.lastVideoId = latest.videoId;
+      entry.lastAnnouncedAt = new Date().toISOString();
+      writeJSONSafe(SAVE_PATH, { channels: this.channels });
     }
   }
 
-  async sendDebugNotification(targetChannel, {
-    attachment = null,
-    title,
-    videoId,
-    publishedAt,
-    mentionContent,
-    allowedMentions,
-  } = {}) {
+  async sendDebugNotification(
+    targetChannel,
+    { attachment = null, title, videoId, publishedAt, mentionContent, allowedMentions } = {}
+  ) {
     if (!targetChannel || typeof targetChannel.isTextBased !== "function" || !targetChannel.isTextBased()) {
       throw new Error("Debug notification channel must be text-based.");
     }
@@ -172,7 +182,9 @@ class YoutubeService {
       publishedAt: publishedAt || new Date().toISOString(),
     };
 
-    await this.#announce(targetChannel, latest, {
+    const entry = (Array.isArray(this.channels) && this.channels[0]) ? this.channels[0] : { channelTitle: "Channel" };
+
+    await this.#announce(targetChannel, entry, latest, {
       thumbnailAttachment: attachment,
       skipStateUpdate: true,
       content: mentionContent ?? `[YouTube] <@&${ALERT_ROLE_ID}> Debug notification preview\nhttps://youtu.be/${latest.videoId}`,
@@ -184,3 +196,4 @@ class YoutubeService {
 YoutubeService.ALERT_ROLE_ID = ALERT_ROLE_ID;
 
 module.exports = YoutubeService;
+

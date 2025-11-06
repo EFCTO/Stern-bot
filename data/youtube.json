@@ -1,1 +1,18 @@
-{}
+{
+  "channels": [
+    {
+      "channelId": "UCr1iJAve1hKzlwEGWBa9jWQ",
+      "channelTitle": "빌헬름 뭐시기",
+      "notifyChannelId": "1413928068036296765",
+      "lastVideoId": "HW5bN3_eSnE",
+      "lastAnnouncedAt": "2025-11-03T07:42:51.781Z"
+    },
+    {
+      "channelId": "UC1D29Nmf3jWZEH1I-QfHlpA",
+      "channelTitle": "위드Go",
+      "notifyChannelId": "1413928068036296765",
+      "lastVideoId": "hoAiGfNj2ow",
+      "lastAnnouncedAt": "2025-11-03T07:58:27.162Z"
+    }
+  ]
+}

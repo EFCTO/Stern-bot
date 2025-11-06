@@ -57,6 +57,12 @@ const CATEGORY_GROUPS = [
       "stop - 재생을 멈추고 큐를 비웁니다",
     ],
   },
+    {
+    title: "버그, 수정사항 신고",
+    keys: [
+      "https://discord.com/channels/879204407496028201/1264423905427325059 채널을 이용해주세요",
+    ],
+  },
   { title: "파티", keys: ["coh3_create", "hoi4_create"] },
   { title: "유틸리티", keys: ["ping"] },
 ];

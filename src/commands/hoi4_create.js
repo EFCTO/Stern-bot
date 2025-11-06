@@ -12,17 +12,19 @@ module.exports = {
     const partyService = await ensurePartyService(interaction);
     if (!partyService) return;
 
-    partyService.createDraft({
+    const draft = partyService.createDraft({
       hostId: interaction.user.id,
       game: "HOI4",
-      mode: "바닐라",
+      mode: "자유전",
+      maxSlots: 8,
       members: [interaction.user.id]
     });
 
     await interaction.reply({
-      embeds: [makeSetupEmbed("HOI4 파티만들기", "옵션을 선택하고 ‘생성’을 누르세요.")],
-      components: createSetupComponents(),
+      embeds: [makeSetupEmbed("HOI4 파티만들기", "드롭다운에서 옵션을 선택하고 추가 정보가 있으면 버튼으로 입력하세요.")],
+      components: createSetupComponents(draft),
       ephemeral: true
     });
   }
 };
+

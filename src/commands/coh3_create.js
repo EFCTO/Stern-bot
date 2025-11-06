@@ -12,19 +12,20 @@ module.exports = {
     const partyService = await ensurePartyService(interaction);
     if (!partyService) return;
 
-    partyService.createDraft({
+    const draft = partyService.createDraft({
       hostId: interaction.user.id,
       game: "COH3",
-      mode: "빠른대전",
+      mode: "커스텀 게임",
       faction: "상관없음",
       maxSlots: 4,
       members: [interaction.user.id]
     });
 
     await interaction.reply({
-      embeds: [makeSetupEmbed("COH3 파티만들기", "옵션을 선택하고 ‘생성’을 누르세요.")],
-      components: createSetupComponents(),
+      embeds: [makeSetupEmbed("COH3 파티만들기", "드롭다운에서 옵션을 선택하고 '생성'을 눌러주세요.")],
+      components: createSetupComponents(draft),
       ephemeral: true
     });
   }
 };
+
