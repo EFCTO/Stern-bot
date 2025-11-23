@@ -13,12 +13,12 @@ async function ensureChzzkService(interaction) {
   if (service && typeof service.sendDebugNotification !== "function") {
     const repository = service.repository ?? null;
     if (repository) {
-      const replacement = new ChzzkService(repository, { pollInterval: service.pollInterval });
+      const replacement = new ChzzkService(repository, { pollInterval: service.pollInterval, warmupOnStart: true });
       // Carry over any previously loaded broadcasters if present
       if (Array.isArray(service.broadcasters)) {
         replacement.broadcasters = service.broadcasters.map(b => ({ ...b }));
       } else if (service.broadcaster) {
-        replacement.broadcasters = [ { ...service.broadcaster } ];
+        replacement.broadcasters = [{ ...service.broadcaster }];
       }
       if (typeof service.shutdown === "function") {
         await service.shutdown().catch(() => {});
@@ -40,8 +40,8 @@ async function ensureChzzkService(interaction) {
   }
 
   const payload = {
-    content: "치지직 연동 서비스가 아직 준비되지 않았습니다. 잠시 후 다시 시도해주세요.",
-    ephemeral: true
+    content: "치지직 모듈이 아직 준비되지 않았습니다. 잠시 후 다시 시도해 주세요.",
+    ephemeral: true,
   };
 
   if (interaction.deferred || interaction.replied) {
@@ -55,5 +55,6 @@ async function ensureChzzkService(interaction) {
 
 module.exports = {
   getChzzkService,
-  ensureChzzkService
+  ensureChzzkService,
 };
+

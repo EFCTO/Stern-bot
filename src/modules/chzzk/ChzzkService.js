@@ -4,9 +4,10 @@ const { getChannel } = require("./api");
 const ALERT_ROLE_ID = "1313043777929216020";
 
 class ChzzkService {
-  constructor(repository, { pollInterval = 60_000 } = {}) {
+  constructor(repository, { pollInterval = 60_000, warmupOnStart = true } = {}) {
     this.repository = repository;
     this.pollInterval = pollInterval;
+    this.warmupOnStart = warmupOnStart;
     this.broadcasters = [];
     this.timer = null;
     this.client = null;
@@ -25,7 +26,16 @@ class ChzzkService {
       this.timer = null;
     }
 
-    await this.#runCheck();
+    // On startup, optionally warm up the in-memory state without announcing
+    if (this.warmupOnStart) {
+      try {
+        await this.#warmupState();
+      } catch (error) {
+        console.error("[Chzzk] warmup failed", error);
+      }
+    } else {
+      // If warmup disabled, wait for the first interval instead of immediate announce
+    }
     this.timer = setInterval(() => {
       this.#runCheck();
     }, this.pollInterval);
@@ -115,6 +125,21 @@ class ChzzkService {
         b.isLive = isLive;
         await this.repository.upsertBroadcaster(b);
       } else if (isLive && !wasLive) {
+        await this.repository.upsertBroadcaster(b);
+      }
+    }
+  }
+
+  async #warmupState() {
+    if (!Array.isArray(this.broadcasters) || this.broadcasters.length === 0) return;
+    for (let i = 0; i < this.broadcasters.length; i++) {
+      const b = this.broadcasters[i];
+      if (!b || !b.channelId) continue;
+      const info = await getChannel(b.channelId).catch(() => null);
+      if (!info) continue;
+      const isLive = Boolean(info.openLive);
+      if (b.isLive !== isLive) {
+        b.isLive = isLive;
         await this.repository.upsertBroadcaster(b);
       }
     }
@@ -233,4 +258,3 @@ class ChzzkService {
 ChzzkService.ALERT_ROLE_ID = ALERT_ROLE_ID;
 
 module.exports = ChzzkService;
-

@@ -12,7 +12,7 @@ const CUSTOM_IDS = {
 
 function createSetupComponents(draft = {}) {
   const currentMode = draft.mode || "멀티";
-  const currentVersion = draft.hoi4Version || "기본";
+  const currentVersion = draft.hoi4Version || "바닐라";
 
   const modeOptions = [
     { label: "멀티", value: "멀티" },
@@ -31,7 +31,7 @@ function createSetupComponents(draft = {}) {
   );
 
   const versionRow = new ActionRowBuilder().addComponents(
-    new StringSelectMenuBuilder().setCustomId(CUSTOM_IDS.selectVersion).setPlaceholder("버전").addOptions(versionOptions)
+    new StringSelectMenuBuilder().setCustomId(CUSTOM_IDS.selectVersion).setPlaceholder("모드 유무").addOptions(versionOptions)
   );
   const actionsRow = new ActionRowBuilder().addComponents(
     new ButtonBuilder().setCustomId(CUSTOM_IDS.infoButton).setLabel("정보 입력/수정").setStyle(ButtonStyle.Primary),

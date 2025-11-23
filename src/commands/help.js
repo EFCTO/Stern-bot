@@ -63,7 +63,11 @@ const CATEGORY_GROUPS = [
       "https://discord.com/channels/879204407496028201/1264423905427325059 채널을 이용해주세요",
     ],
   },
-  { title: "파티", keys: ["coh3_create", "hoi4_create"] },
+  { title: "파티", keys: [
+    "coh3_create", 
+    "hoi4_create",
+    "자세한 파티 관련 명령어 사용법은 /party_help 를 참고하세요"
+  ] },
   { title: "유틸리티", keys: ["ping"] },
 ];
 
