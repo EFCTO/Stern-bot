@@ -35,7 +35,7 @@ const DOCS = {
 
 const CATEGORY_GROUPS = [
   {
-    title: "시작하기",
+    title: "음악",
     lines: [
       "1) 음성 채널에 먼저 들어갑니다.",
       "2) /play <검색어|URL> 로 음악을 재생합니다.",

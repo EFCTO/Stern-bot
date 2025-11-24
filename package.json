@@ -2,6 +2,7 @@
   "dependencies": {
     "@discordjs/voice": "^0.19.0",
     "@distube/ytdl-core": "^4.16.12",
+    "@google/generative-ai": "^0.24.1",
     "@snazzah/davey": "^0.1.7",
     "discord-api-types": "^0.38.31",
     "discord.js": "^14.24.0",
