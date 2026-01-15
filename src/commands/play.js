@@ -1,5 +1,5 @@
 const { SlashCommandBuilder, ChannelType } = require("discord.js");
-const { ensureMusicService } = require("../modules/music/helpers");
+const { ensureMusicService, getMusicTargetErrorMessage, resolveMusicTarget } = require("../modules/music/helpers");
 const { createTrackEmbed } = require("../modules/music/embeds");
 
 module.exports = {
@@ -16,9 +16,15 @@ module.exports = {
     const service = await ensureMusicService(interaction);
     if (!service) return;
 
+    const target = await resolveMusicTarget(interaction);
+    if (target.error) {
+      await interaction.reply({ content: getMusicTargetErrorMessage(target.error), ephemeral: true });
+      return;
+    }
+
     const query = interaction.options.getString("query", true);
 
-    const member = await interaction.guild.members.fetch(interaction.user.id);
+    const member = target.member;
     const voiceChannel = member.voice?.channel;
 
     const isStageChannel = voiceChannel && voiceChannel.type === ChannelType.GuildStageVoice;
@@ -28,7 +34,7 @@ module.exports = {
       return;
     }
 
-    const botMember = interaction.guild.members.me;
+    const botMember = target.botMember;
     if (botMember?.voice?.channelId && botMember.voice.channelId !== voiceChannel.id) {
       await interaction.reply({ content: "이미 다른 음성 채널에서 음악을 재생 중입니다.", ephemeral: true });
       return;
@@ -48,7 +54,7 @@ module.exports = {
         return;
       }
 
-      const queue = service.getQueue(interaction.guild);
+      const queue = service.getQueue(target.guild);
       queue.setTextChannel(interaction.channelId);
       await queue.connect(voiceChannel);
 

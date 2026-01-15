@@ -3,18 +3,18 @@ const {
   isTargetChannel,
   handleOwnGuideMessage,
   handleParticipantMessage,
-} = require("../modules/championship/guideManager");
+} = require("../modules/guide/coh3_guide");
 
 async function resolveMessage(message) {
   if (!message?.partial) return message;
   try {
     return await message.fetch();
   } catch (error) {
-    console.error("[ChampionshipGuide] Failed to fetch partial message", error);
+    console.error("[coh3Guide] Failed to fetch partial message", error);
     return null;
   }
 }
-
+//
 module.exports = {
   name: Events.MessageCreate,
   async execute(message) {
@@ -35,3 +35,5 @@ module.exports = {
     await handleParticipantMessage(resolved);
   },
 };
+
+//src/events/messageCreate.championshipGuide.js

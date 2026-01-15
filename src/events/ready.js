@@ -3,14 +3,14 @@ const { closeParty } = require("../modules/party/lifecycle");
 const { getPartyService } = require("../modules/party/helpers");
 const { getChzzkService } = require("../modules/chzzk/helpers");
 const { ensureYoutubeService } = require("../modules/youtube/helpers");
-const { bootstrapGuide } = require("../modules/championship/guideManager");
+const { bootstrapGuide } = require("../modules/guide/coh3_guide");
 const { startStatsJobs } = require("../jobs/statsScheduler");
 
 module.exports = {
   name: Events.ClientReady,
   once: true,
   async execute(client) {
-    console.log(`✅ Logged in as ${client.user.tag}`);
+    console.log(`Logged in as ${client.user.tag}`);
 
     try {
       await bootstrapGuide(client);
@@ -66,3 +66,6 @@ module.exports = {
     }
   }
 };
+
+
+//src/events/ready.js

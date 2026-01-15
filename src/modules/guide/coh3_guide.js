@@ -1,14 +1,17 @@
-﻿const { EmbedBuilder } = require("discord.js");
+﻿const path = require("path");
 
-const TARGET_CHANNEL_ID = "1423741987105800313";
-const GUIDE_TITLE = "⭐ 대회 참여 지원 양식";
-const GUIDE_FOOTER = "Championship Application";
-const GUIDE_KEYWORD = "Championship of Heroes";
+const { EmbedBuilder, AttachmentBuilder } = require("discord.js");
+
+const TARGET_CHANNEL_ID = "1385538235601522748";
+const GUIDE_TITLE = "파티 제작 방법";
+const GUIDE_FOOTER = "군수부";
+const GUIDE_KEYWORD = "Holstein Land";
 const GUIDE_DESCRIPTION = [
-  "Championship of Heroes 참가 조건은 **ELO 1200 이상**입니다.",
-  "참가를 희망하시면 닉네임과 ELO가 보이는 프로필 이미지를 함께 올려 주세요.",
-  "제출하신 정보를 확인한 뒤 운영진이 답장 안내를 드립니다."
-].join("\n\n");
+  "* `/coh3_create` 명령어를 사용하여 파티 설정을 열수 있습니다",
+  "* 파티 참가는 초록색 참가 버튼, 파티 탈퇴는 회색 탈퇴 버튼을 누르시면 됩니다.",
+  "* 방장은 `/party_end` 명령어를 이용하여 파티를 종료할 수 있습니다",
+  "* 방장은 `/party_trasfer` 명령어를 이용하여 방장 권한을 다른 참가자에게 양도할 수 있습니다",
+].join("\n");
 
 const guideState = {
   messageId: null,
@@ -30,17 +33,23 @@ function messageHasGuideEmbed(message) {
 }
 
 function createGuidePayload() {
+  const filePath = path.join(process.cwd(), "src/modules/guide/coh3guide.png");
+  const file = new AttachmentBuilder(filePath, { name: "coh3guide.png" });
+
   const embed = new EmbedBuilder()
-    .setColor(0xFEE75C)
+    .setColor(0x0066FF)
     .setTitle(GUIDE_TITLE)
     .setDescription(GUIDE_DESCRIPTION)
+    .setImage("attachment://coh3guide.png")
     .setFooter({ text: GUIDE_FOOTER });
 
   return {
     embeds: [embed],
+    files: [file],
     allowedMentions: { parse: [] },
   };
 }
+
 
 async function fetchGuideChannel(client) {
   if (!client) return null;
@@ -49,7 +58,7 @@ async function fetchGuideChannel(client) {
     if (!channel?.isTextBased?.()) return null;
     return channel;
   } catch (error) {
-    console.error("[ChampionshipGuide] Failed to fetch channel", error);
+    console.error("[coh3Guide] Failed to fetch channel", error);
     return null;
   }
 }
@@ -68,7 +77,7 @@ async function fetchExistingGuideMessages(channel, botUserId) {
     matches.sort((a, b) => b.createdTimestamp - a.createdTimestamp);
     return matches;
   } catch (error) {
-    console.error("[ChampionshipGuide] Failed to inspect existing messages", error);
+    console.error("[coh3Guide] Failed to inspect existing messages", error);
     return [];
   }
 }
@@ -79,7 +88,7 @@ async function deleteMessageQuietly(message) {
     await message.delete();
   } catch (error) {
     if (error?.code !== 10008) {
-      console.error("[ChampionshipGuide] Failed to delete message", error);
+      console.error("[coh3Guide] Failed to delete message", error);
     }
   }
 }
@@ -99,7 +108,7 @@ async function refreshGuideMessage(channel) {
         }
       } catch (error) {
         if (error?.code !== 10008) {
-          console.error("[ChampionshipGuide] Failed to remove previous guide", error);
+          console.error("[coh3Guide] Failed to remove previous guide", error);
         }
       }
       guideState.messageId = null;
@@ -136,7 +145,7 @@ async function bootstrapGuide(client) {
       guideState.messageId = latest.id;
       return;
     } catch (error) {
-      console.error("[ChampionshipGuide] Failed to update existing guide", error);
+      console.error("[coh3Guide] Failed to update existing guide", error);
     }
   }
 

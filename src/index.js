@@ -15,7 +15,6 @@ function resolveFfmpegBinary() {
       candidates.push(installerPath);
     }
   } catch {
-    // optional dependency not installed; ignore
   }
 
   for (const candidate of candidates) {

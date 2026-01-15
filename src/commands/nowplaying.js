@@ -1,5 +1,5 @@
 const { SlashCommandBuilder } = require("discord.js");
-const { ensureMusicService } = require("../modules/music/helpers");
+const { ensureMusicService, getMusicTargetErrorMessage, resolveMusicTarget } = require("../modules/music/helpers");
 const { createNowPlayingEmbed } = require("../modules/music/embeds");
 
 module.exports = {
@@ -8,7 +8,13 @@ module.exports = {
     const service = await ensureMusicService(interaction);
     if (!service) return;
 
-    const queue = service.getExistingQueue(interaction.guild);
+    const target = await resolveMusicTarget(interaction);
+    if (target.error) {
+      await interaction.reply({ content: getMusicTargetErrorMessage(target.error), ephemeral: true });
+      return;
+    }
+
+    const queue = service.getExistingQueue(target.guild);
     if (!queue || !queue.current) {
       await interaction.reply({ content: "재생 중인 곡이 없습니다.", ephemeral: true });
       return;
