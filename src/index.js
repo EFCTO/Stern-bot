@@ -53,6 +53,7 @@ async function bootstrap() {
       GatewayIntentBits.MessageContent,
       GatewayIntentBits.GuildVoiceStates,
       GatewayIntentBits.GuildMembers,
+      GatewayIntentBits.GuildModeration,
     ],
     partials: [
       Partials.Channel,
@@ -120,4 +121,3 @@ bootstrap().catch((err) => {
   console.error("초기화 실패:", err);
   process.exit(1);
 });
-

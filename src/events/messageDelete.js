@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require("discord.js");
 const { sendManagementLog } = require("../utils/managementLog");
+const { sendGlobalLogEmbed } = require("../utils/globalLog");
 
 function safeFetch(message) {
   if (!message.partial) return Promise.resolve(message);
@@ -63,6 +64,36 @@ module.exports = {
       }
 
       await sendManagementLog(fetched.client, { embeds: [embed] });
+
+      const logLines = [];
+      if (fetched.id) logLines.push(`Message ID: \`${fetched.id}\``);
+      if (fetched.content) logLines.push(fetched.content);
+      if (attachments.length) {
+        const list = attachments.map((att) => att.url).slice(0, 5).join("\n");
+        const suffix = attachments.length > 5 ? `\n(+${attachments.length - 5} more attachments)` : "";
+        logLines.push(`Attachments:\n${list}${suffix}`);
+      }
+      if (Array.isArray(fetched.embeds) && fetched.embeds.length) {
+        logLines.push(`Embeds: ${fetched.embeds.length}`);
+      }
+      if (fetched.stickers && fetched.stickers.size) {
+        const stickerNames = [...fetched.stickers.values()].map((s) => s.name).slice(0, 5).join(", ");
+        logLines.push(`Stickers: ${stickerNames || `${fetched.stickers.size} sticker(s)`}`);
+      }
+      if (ref?.guildId && ref?.channelId && ref?.messageId) {
+        const link = `https://discord.com/channels/${ref.guildId}/${ref.channelId}/${ref.messageId}`;
+        logLines.push(`Reply To: ${link}`);
+      }
+
+      await sendGlobalLogEmbed(fetched.client, {
+        type: "Message Deleted",
+        user: author,
+        member: fetched.member,
+        content: logLines.join("\n"),
+        guild: fetched.guild,
+        channelId: fetched.channelId,
+        color: 0xED4245,
+      });
     } catch (error) {
       console.error("[messageDelete] error", error);
     }

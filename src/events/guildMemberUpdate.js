@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require("discord.js");
 const { sendManagementLog } = require("../utils/managementLog");
+const { sendGlobalLogEmbed } = require("../utils/globalLog");
 
 function formatUserTag(user) {
   if (!user) return "알 수 없음";
@@ -42,6 +43,11 @@ module.exports = {
       if (newMember.user?.bot) return;
 
       const changes = [];
+      const globalChanges = [];
+      const oldAvatarUrl = oldMember.user?.displayAvatarURL?.({ size: 256, forceStatic: false }) ?? null;
+      const oldBannerUrl = typeof oldMember.user?.bannerURL === "function"
+        ? oldMember.user.bannerURL({ size: 512 })
+        : null;
 
       // Ensure we have freshest user profile for banner/accentColor comparisons
       let oldUser = oldMember.user;
@@ -54,6 +60,7 @@ module.exports = {
         // ignore fetch failures; use cached values
       }
       if (oldMember.displayName !== newMember.displayName) {
+        globalChanges.push(`Display Name: \`${oldMember.displayName ?? "(none)"}\` -> \`${newMember.displayName ?? "(none)"}\``);
         changes.push({
           name: "닉네임 변경",
           value: `\`${oldMember.displayName ?? "(없음)"}\` → \`${newMember.displayName ?? "(없음)"}\``,
@@ -61,6 +68,7 @@ module.exports = {
       }
 
       if (oldUser?.username !== newUser?.username) {
+        globalChanges.push(`Username: \`${oldUser?.username ?? "(none)"}\` -> \`${newUser?.username ?? "(none)"}\``);
         changes.push({
           name: "사용자명 변경",
           value: `\`${oldUser.username ?? "(없음)"}\` → \`${newUser.username ?? "(없음)"}\``,
@@ -68,6 +76,7 @@ module.exports = {
       }
 
       if (oldUser?.globalName !== newUser?.globalName) {
+        globalChanges.push(`Global Name: \`${oldUser?.globalName ?? "(none)"}\` -> \`${newUser?.globalName ?? "(none)"}\``);
         changes.push({
           name: "프로필 이름 변경",
           value: `\`${oldUser.globalName ?? "(없음)"}\` → \`${newUser.globalName ?? "(없음)"}\``,
@@ -75,6 +84,12 @@ module.exports = {
       }
 
       if (oldUser?.avatar !== newUser?.avatar) {
+        const newAvatarUrl = typeof newUser?.displayAvatarURL === "function"
+          ? newUser.displayAvatarURL({ size: 256 })
+          : null;
+        globalChanges.push(
+          `Avatar: ${oldAvatarUrl ? `[Before](${oldAvatarUrl})` : "(none)"} -> ${newAvatarUrl ? `[After](${newAvatarUrl})` : "(none)"}`
+        );
         changes.push({
           name: "아바타 변경",
           value: [
@@ -88,6 +103,12 @@ module.exports = {
       const oldBanner = oldUser?.banner ?? null;
       const newBanner = newUser?.banner ?? null;
       if (oldBanner !== newBanner) {
+        const newBannerUrl = typeof newUser?.bannerURL === "function"
+          ? newUser.bannerURL({ size: 512 })
+          : null;
+        const bannerBefore = oldBannerUrl ? `[Before](${oldBannerUrl})` : "(none)";
+        const bannerAfter = newBannerUrl ? `[After](${newBannerUrl})` : "(none)";
+        globalChanges.push(`Banner: ${bannerBefore} -> ${bannerAfter}`);
         const oldUrl = typeof newMember.user.bannerURL === "function" && oldBanner ? newMember.user.bannerURL({ size: 512 }) : null;
         const newUrl = typeof newUser.bannerURL === "function" && newBanner ? newUser.bannerURL({ size: 512 }) : null;
         changes.push({
@@ -99,6 +120,7 @@ module.exports = {
       const oldAccent = oldUser?.hexAccentColor ?? null;
       const newAccent = newUser?.hexAccentColor ?? null;
       if (oldAccent !== newAccent) {
+        globalChanges.push(`Accent Color: \`${oldAccent ?? "(none)"}\` -> \`${newAccent ?? "(none)"}\``);
         changes.push({
           name: "강조 색상 변경",
           value: `\`${oldAccent ?? "(없음)"}\` → \`${newAccent ?? "(없음)"}\``,
@@ -109,9 +131,11 @@ module.exports = {
       const addedText = formatRoleList(newMember.guild, added);
       const removedText = formatRoleList(newMember.guild, removed);
       if (addedText) {
+        globalChanges.push(`Roles Added: ${addedText}`);
         changes.push({ name: "추가된 역할", value: addedText });
       }
       if (removedText) {
+        globalChanges.push(`Roles Removed: ${removedText}`);
         changes.push({ name: "제거된 역할", value: removedText });
       }
 
@@ -122,6 +146,12 @@ module.exports = {
         const oldTxt = oldTimeout ? `<t:${Math.floor(oldTimeout / 1000)}:R>` : "(없음)";
         const newTxt = newTimeout ? `<t:${Math.floor(newTimeout / 1000)}:R>` : "(없음)";
         changes.push({ name: "타임아웃 변경", value: `${oldTxt} → ${newTxt}` });
+      }
+
+      if (oldTimeout !== newTimeout) {
+        const oldTxt = oldTimeout ? `<t:${Math.floor(oldTimeout / 1000)}:R>` : "(none)";
+        const newTxt = newTimeout ? `<t:${Math.floor(newTimeout / 1000)}:R>` : "(none)";
+        globalChanges.push(`Timeout: ${oldTxt} -> ${newTxt}`);
       }
 
       if (!changes.length) {
@@ -140,6 +170,19 @@ module.exports = {
         .setTimestamp(new Date());
 
       await sendManagementLog(newMember.client, { embeds: [embed] });
+
+      await sendGlobalLogEmbed(newMember.client, {
+        type: "Member Updated",
+        user: newMember.user,
+        member: newMember,
+        content: globalChanges.join("\n"),
+        guild: newMember.guild,
+        channelId: newMember.guild.systemChannelId
+          ?? newMember.guild.rulesChannelId
+          ?? newMember.guild.publicUpdatesChannelId
+          ?? null,
+        color: 0x5865F2,
+      });
     } catch (error) {
       console.error("[guildMemberUpdate] error", error);
     }

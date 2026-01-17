@@ -1,6 +1,7 @@
 const { EmbedBuilder } = require("discord.js");
 const { getPool } = require("../db/mysql");
 const { buildRolePanelPayload } = require("../utils/rolePanel");
+const { sendGlobalLogEmbed } = require("../utils/globalLog");
 
 module.exports = {
   name: "guildMemberAdd",
@@ -21,6 +22,23 @@ module.exports = {
           await ch.send({ embeds: [emb] });
         }
       }
+
+      const createdAt = member.user?.createdTimestamp
+        ? `<t:${Math.floor(member.user.createdTimestamp / 1000)}:R>`
+        : null;
+      const logLines = ["Member joined.", createdAt ? `Account Created: ${createdAt}` : null].filter(Boolean);
+      await sendGlobalLogEmbed(member.client, {
+        type: "Member Joined",
+        user: member.user,
+        member,
+        content: logLines.join("\n"),
+        guild: member.guild,
+        channelId: member.guild.systemChannelId
+          ?? member.guild.rulesChannelId
+          ?? member.guild.publicUpdatesChannelId
+          ?? null,
+        color: 0x57F287,
+      });
 
       try {
         const { embed, components } = buildRolePanelPayload();

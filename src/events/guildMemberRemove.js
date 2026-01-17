@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require("discord.js");
 const { getPool } = require("../db/mysql");
+const { sendGlobalLogEmbed } = require("../utils/globalLog");
 
 module.exports = {
   name: "guildMemberRemove",
@@ -17,6 +18,20 @@ module.exports = {
           await ch.send({ embeds: [emb] });
         }
       }
+
+      const logLines = ["Member left."];
+      await sendGlobalLogEmbed(member.client, {
+        type: "Member Left",
+        user: member.user,
+        member,
+        content: logLines.join("\n"),
+        guild: member.guild,
+        channelId: member.guild.systemChannelId
+          ?? member.guild.rulesChannelId
+          ?? member.guild.publicUpdatesChannelId
+          ?? null,
+        color: 0xED4245,
+      });
 
       const pool = await getPool();
       if (!pool) {

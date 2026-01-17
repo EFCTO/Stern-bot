@@ -1,5 +1,6 @@
 const { EmbedBuilder } = require("discord.js");
 const { sendManagementLog } = require("../utils/managementLog");
+const { sendGlobalLogEmbed } = require("../utils/globalLog");
 
 async function fetchIfPartial(message) {
   if (!message.partial) return message;
@@ -12,6 +13,12 @@ async function fetchIfPartial(message) {
 
 function truncate(text, limit = 1024) {
   if (!text) return "(내용 없음)";
+  if (text.length <= limit) return text;
+  return `${text.slice(0, limit - 3)}...`;
+}
+
+function truncatePlain(text, limit = 400) {
+  if (!text) return "(no content)";
   if (text.length <= limit) return text;
   return `${text.slice(0, limit - 3)}...`;
 }
@@ -48,6 +55,22 @@ module.exports = {
         .setTimestamp(new Date());
 
       await sendManagementLog(after.client, { embeds: [embed] });
+
+      const logLines = [
+        `Message ID: \`${after.id ?? "unknown"}\``,
+        `Before: ${truncatePlain(beforeContent)}`,
+        `After: ${truncatePlain(afterContent)}`,
+      ];
+
+      await sendGlobalLogEmbed(after.client, {
+        type: "Message Edited",
+        user: author,
+        member: after.member,
+        content: logLines.join("\n"),
+        guild: after.guild,
+        channelId: after.channelId,
+        color: 0xFEE75C,
+      });
     } catch (error) {
       console.error("[messageUpdate] error", error);
     }
