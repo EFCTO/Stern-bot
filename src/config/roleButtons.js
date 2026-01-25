@@ -25,7 +25,7 @@ module.exports = {
       label: "전술부 유저",
       emoji: "🪖",
       description:
-        "유저 주최 비공식 멀티(컴퍼니 오브 히어로즈 시리즈)에 참여할 수 있습니다.",
+        "유저 주최 비공식 멀티에 참여할 수 있습니다.",
     },
         "role:libraryuser": {
       label: "도서관 유저",
